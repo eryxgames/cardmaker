@@ -81,6 +81,16 @@ class CardMaker(QMainWindow):
         load_template_btn.clicked.connect(self.load_template)
         template_layout.addWidget(load_template_btn)
 
+        # Save template button
+        save_template_btn = QPushButton("Save Template")
+        save_template_btn.clicked.connect(self.save_template)
+        template_layout.addWidget(save_template_btn)
+
+        # Save template as button
+        save_as_template_btn = QPushButton("Save Template As")
+        save_as_template_btn.clicked.connect(self.save_as_template)
+        template_layout.addWidget(save_as_template_btn)
+
         # Card size controls
         size_group = QWidget()
         size_layout = QHBoxLayout()
@@ -163,6 +173,16 @@ class CardMaker(QMainWindow):
         load_card_data_btn = QPushButton("Load Card Data")
         load_card_data_btn.clicked.connect(self.load_card_data)
         card_data_layout.addWidget(load_card_data_btn)
+
+        # Save card data button
+        save_card_data_btn = QPushButton("Save Card Data")
+        save_card_data_btn.clicked.connect(self.save_card_data)
+        card_data_layout.addWidget(save_card_data_btn)
+
+        # Save card data as button
+        save_as_card_data_btn = QPushButton("Save Card Data As")
+        save_as_card_data_btn.clicked.connect(self.save_as_card_data)
+        card_data_layout.addWidget(save_as_card_data_btn)
 
         # Card data table
         self.card_data_table = QTableWidget()
@@ -310,6 +330,44 @@ class CardMaker(QMainWindow):
         self.update_layers_table()
         self.update_card_data_table()
         self.update_preview()
+
+    def save_template(self):
+        file_name, _ = QFileDialog.getSaveFileName(
+            self, "Save Template", "", "JSON files (*.json)"
+        )
+        if not file_name:
+            return
+
+        self.template.save_to_json(file_name)
+
+    def save_as_template(self):
+        file_name, _ = QFileDialog.getSaveFileName(
+            self, "Save Template As", "", "JSON files (*.json)"
+        )
+        if not file_name:
+            return
+
+        self.template.save_to_json(file_name)
+
+    def save_card_data(self):
+        file_name, _ = QFileDialog.getSaveFileName(
+            self, "Save Card Data", "", "CSV files (*.csv)"
+        )
+        if not file_name:
+            return
+
+        df = pd.DataFrame(self.card_data)
+        df.to_csv(file_name, index=False)
+
+    def save_as_card_data(self):
+        file_name, _ = QFileDialog.getSaveFileName(
+            self, "Save Card Data As", "", "CSV files (*.csv)"
+        )
+        if not file_name:
+            return
+
+        df = pd.DataFrame(self.card_data)
+        df.to_csv(file_name, index=False)
 
     def load_card_data(self):
         file_name, _ = QFileDialog.getOpenFileName(
@@ -621,6 +679,15 @@ class CardMaker(QMainWindow):
                             height - 2 * self.template.bleed,
                         )
                         painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, str(card_data.get(field, "")))
+
+            # Draw illustration if provided
+            if "illustration" in card_data and card_data["illustration"]:
+                illustration_path = card_data["illustration"]
+                illustration_pixmap = QPixmap(illustration_path)
+                painter.drawPixmap(
+                    QPointF(0, 0),
+                    illustration_pixmap,
+                )
 
         painter.end()
         return image
