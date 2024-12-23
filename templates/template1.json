@@ -1,0 +1,40 @@
+{
+    "width": 825,
+    "height": 1125,
+    "bleed": 75,
+    "layers": [
+      {
+        "path": "card_front.svg",
+        "type": "svg",
+        "position": [0, 0],
+        "order": 0
+      },
+      {
+        "path": "card_back.png",
+        "type": "png",
+        "position": [0, 0],
+        "order": 1
+      }
+    ],
+    "data_fields": [
+      "Name",
+      "Type",
+      "Attack",
+      "Defense",
+      "Health",
+      "Special"
+    ],
+    "fonts": {
+      "default": "Arial"
+    },
+    "data_field_positions": {
+      "Name": [100, 100],
+      "Type": [100, 200],
+      "Attack": [100, 300],
+      "Defense": [100, 400],
+      "Health": [100, 500],
+      "Special": [100, 600]
+    },
+    "card_image_path": ""
+  }
+  

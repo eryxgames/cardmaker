@@ -1,16 +1,12 @@
 import sys
 import csv
-import json
 import pandas as pd
 from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
     QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
     QPushButton,
     QLabel,
-    QFileDialog,
     QTableWidget,
     QTableWidgetItem,
     QSpinBox,
@@ -22,11 +18,12 @@ from PyQt6.QtWidgets import (
     QButtonGroup,
     QInputDialog,
     QDoubleSpinBox,
-    QListWidget,
-    QListWidgetItem,
+    QVBoxLayout,
+    QHBoxLayout,
+    QFileDialog,
 )
-from PyQt6.QtCore import Qt, QPointF, QSizeF, QRectF
-from PyQt6.QtSvg import QSvgRenderer
+from PyQt6.QtCore import Qt, QSize, QRectF, QSizeF, QPointF, QMarginsF
+
 from PyQt6.QtGui import (
     QImage,
     QPainter,
@@ -36,149 +33,37 @@ from PyQt6.QtGui import (
     QFont,
     QFontDatabase,
     QColor,
+    QPageSize,
 )
+from PyQt6.QtSvg import QSvgRenderer
 import numpy as np
 from PIL import Image
-
-# Load template data from JSON file
-with open("demo_template.json", "r") as f:
-    template_data = json.load(f)
+import json
+from cardtemplate import CardTemplate  # Import the CardTemplate class
 
 DEMO_CSV_FILE = "demo_data.csv"
 DEMO_TEMPLATE_FILE = "demo_template.json"
 PDF_PAGE_SIZES = {
-    "A4": QPdfWriter.PageSize.A4,
-    "A3": QPdfWriter.PageSize.A3,
-    "B4": QPdfWriter.PageSize.B4,
-    "B3": QPdfWriter.PageSize.B3,
+    "A4": QPageSize.PageSizeId.A4,
+    "A3": QPageSize.PageSizeId.A3,
+    "B4": QPageSize.PageSizeId.B4,
+    "B3": QPageSize.PageSizeId.B3,
     "Custom": None,
 }
-
-class CardTemplate:
-    def __init__(self, file_path=None):
-        if file_path:
-            self.load_from_json(file_path)
-
-        self.width = template_data["width"]
-        self.height = template_data["height"]
-        self.bleed = template_data["bleed"]
-        self.layers = []
-        self.data_fields = template_data["data_fields"]
-        self.fonts = {}
-        self.data_field_positions = {field: (0, 0) for field in self.data_fields}  # X, Y
-        self.card_image_path = ""
-        self.card_image = None
-
-    def load_from_json(self, file_path):
-        try:
-            with open(file_path, "r") as f:
-                data = json.load(f)
-
-            self.width = data["width"]
-            self.height = data["height"]
-            self.bleed = data["bleed"]
-            self.layers = [
-                {
-                    "path": layer["path"],
-                    "type": layer["type"],
-                    "position": layer["position"],
-                    "order": layer["order"],
-                }
-                for layer in data["layers"]
-            ]
-            self.data_fields = data["data_fields"]
-            self.fonts = data["fonts"]
-            self.data_field_positions = {field: tuple(data["data_field_positions"].get(field, (0, 0))) for field in self.data_fields}
-            self.card_image_path = data.get("card_image_path", "")
-            if self.card_image_path:
-                self.card_image = QPixmap(self.card_image_path)
-        except (FileNotFoundError, json.JSONDecodeError) as e:
-            QMessageBox.warning(None, "Error", f"Failed to load template: {e}")
-
-    def save_to_json(self, file_path):
-        data = {
-            "width": self.width,
-            "height": self.height,
-            "bleed": self.bleed,
-            "layers": [
-                {
-                    "path": layer["path"],
-                    "type": layer["type"],
-                    "position": layer["position"],
-                    "order": layer["order"],
-                }
-                for layer in self.layers
-            ],
-            "data_fields": self.data_fields,
-            "fonts": self.fonts,
-            "data_field_positions": {field: list(pos) for field, pos in self.data_field_positions.items()},
-            "card_image_path": self.card_image_path,
-        }
-        try:
-            with open(file_path, "w") as f:
-                json.dump(data, f)
-        except IOError as e:
-            QMessageBox.warning(None, "Error", f"Failed to save template: {e}")
-
-    def add_layer(self, path, layer_type, position=(0, 0)):
-        self.layers.append(
-            {
-                "path": path,
-                "type": layer_type,  # 'svg', 'png', or 'mask'
-                "position": position,
-                "order": len(self.layers),  # Add order for reordering
-            }
-        )
-        self.layers = sorted(self.layers, key=lambda x: x["order"])  # Sort layers
-
-    def set_data_fields(self, fields):
-        self.data_fields = fields
-
-    def add_font(self, path):
-        id = QFontDatabase.addApplicationFont(path)
-        if id != -1:
-            self.fonts[path] = QFontDatabase.applicationFontFamilies(id)[0]
-        else:
-            QMessageBox.warning(None, "Warning", "Failed to load font.")
-
-    def set_data_field_position(self, field, x, y):
-        self.data_field_positions[field] = (x, y)
-
-    def set_card_image_path(self, path):
-        self.card_image_path = path
-        if path:
-            self.card_image = QPixmap(path)
-
-    def get_card_image(self):
-        return self.card_image
 
 class CardMaker(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.template = CardTemplate(DEMO_TEMPLATE_FILE)
-        self.card_data = []
-        self.undo_stack = []
-        self.redo_stack = []
-        self.demo_data_loaded = False
-        self.current_card_index = 0
-        self.initUI()
-
-    def initUI(self):
         self.setWindowTitle("CardMaker")
-        self.setGeometry(100, 100, 1200, 800)
+        self.setGeometry(100, 100, 1200, 800)  # Increased size to accommodate card preview
 
         # Create main widget and layout
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
-        layout = QHBoxLayout()
+        layout = QVBoxLayout()
         main_widget.setLayout(layout)
 
-        # Left panel for controls
-        left_panel = QWidget()
-        left_layout = QVBoxLayout()
-        left_panel.setLayout(left_layout)
-
-        # Template controls
+        # Template selection and loading
         template_group = QWidget()
         template_layout = QVBoxLayout()
         template_group.setLayout(template_layout)
@@ -188,11 +73,6 @@ class CardMaker(QMainWindow):
         load_template_btn.clicked.connect(self.load_template)
         template_layout.addWidget(load_template_btn)
 
-        # Add layer button
-        add_layer_btn = QPushButton("Add Layer")
-        add_layer_btn.clicked.connect(self.add_layer)
-        template_layout.addWidget(add_layer_btn)
-
         # Card size controls
         size_group = QWidget()
         size_layout = QHBoxLayout()
@@ -200,49 +80,26 @@ class CardMaker(QMainWindow):
 
         self.width_spin = QSpinBox()
         self.width_spin.setRange(100, 3000)
-        self.width_spin.setValue(self.template.width)
-        self.width_spin.valueChanged.connect(self.update_card_size)
+        self.width_spin.setValue(825)
+        size_layout.addWidget(QLabel("Width:"))
+        size_layout.addWidget(self.width_spin)
 
         self.height_spin = QSpinBox()
         self.height_spin.setRange(100, 3000)
-        self.height_spin.setValue(self.template.height)
-        self.height_spin.valueChanged.connect(self.update_card_size)
-
-        size_layout.addWidget(QLabel("Width:"))
-        size_layout.addWidget(self.width_spin)
+        self.height_spin.setValue(1125)
         size_layout.addWidget(QLabel("Height:"))
         size_layout.addWidget(self.height_spin)
 
         template_layout.addWidget(size_group)
 
-        # Data controls
-        data_group = QWidget()
-        data_layout = QVBoxLayout()
-        data_group.setLayout(data_layout)
-
-        # Import data button
-        load_data_btn = QPushButton("Import Data (CSV/Excel)")
-        load_data_btn.clicked.connect(self.load_data)
-        data_layout.addWidget(load_data_btn)
-
-        # Data table
-        self.data_table = QTableWidget()
-        data_layout.addWidget(self.data_table)
-
-        # Demo data checkbox
-        demo_data_checkbox = QCheckBox("Use Demo Data")
-        demo_data_checkbox.setChecked(True)
-        demo_data_checkbox.stateChanged.connect(self.toggle_demo_data)
-        data_layout.addWidget(demo_data_checkbox)
-
-        # Data field controls
+        # Data fields control
         data_fields_group = QWidget()
         data_fields_layout = QVBoxLayout()
         data_fields_group.setLayout(data_fields_layout)
 
         # Data field combo box
         self.data_fields_combo = QComboBox()
-        self.data_fields_combo.addItems(self.template.data_fields)
+        data_fields_layout.addWidget(QLabel("Data Fields:"))
         data_fields_layout.addWidget(self.data_fields_combo)
 
         # Add data field button
@@ -255,29 +112,26 @@ class CardMaker(QMainWindow):
         remove_data_field_btn.clicked.connect(self.remove_data_field)
         data_fields_layout.addWidget(remove_data_field_btn)
 
-        data_layout.addWidget(data_fields_group)
+        layout.addWidget(template_group)
+        layout.addWidget(data_fields_group)
 
-        # Data field position controls
-        data_field_position_group = QWidget()
-        data_field_position_layout = QHBoxLayout()
-        data_field_position_group.setLayout(data_field_position_layout)
+        # Layers control
+        layers_group = QWidget()
+        layers_layout = QVBoxLayout()
+        layers_group.setLayout(layers_layout)
 
-        self.data_field_x_spin = QDoubleSpinBox()
-        self.data_field_x_spin.setRange(0, self.template.width)
-        self.data_field_x_spin.setValue(self.template.data_field_positions[self.template.data_fields[0]][0])
-        self.data_field_x_spin.valueChanged.connect(self.update_data_field_position)
+        # Layers table
+        self.layers_table = QTableWidget()
+        self.layers_table.setColumnCount(5)
+        self.layers_table.setHorizontalHeaderLabels(
+            ["Path", "Type", "Position X", "Position Y", "Order", "Visible"]
+        )
+        layers_layout.addWidget(self.layers_table)
 
-        self.data_field_y_spin = QDoubleSpinBox()
-        self.data_field_y_spin.setRange(0, self.template.height)
-        self.data_field_y_spin.setValue(self.template.data_field_positions[self.template.data_fields[0]][1])
-        self.data_field_y_spin.valueChanged.connect(self.update_data_field_position)
-
-        data_field_position_layout.addWidget(QLabel("X:"))
-        data_field_position_layout.addWidget(self.data_field_x_spin)
-        data_field_position_layout.addWidget(QLabel("Y:"))
-        data_field_position_layout.addWidget(self.data_field_y_spin)
-
-        data_layout.addWidget(data_field_position_group)
+        # Add layer button
+        add_layer_btn = QPushButton("Add Layer")
+        add_layer_btn.clicked.connect(self.add_layer)
+        layers_layout.addWidget(add_layer_btn)
 
         # Move layer buttons
         move_layer_group = QWidget()
@@ -294,24 +148,44 @@ class CardMaker(QMainWindow):
         move_down_btn.clicked.connect(self.move_layer_down)
         move_layer_layout.addWidget(move_down_btn)
 
-        data_layout.addWidget(move_layer_group)
+        layers_layout.addWidget(move_layer_group)
 
-        # Card image controls
-        card_image_group = QWidget()
-        card_image_layout = QHBoxLayout()
-        card_image_group.setLayout(card_image_layout)
+        layout.addWidget(layers_group)
 
-        # Load card image button
-        load_card_image_btn = QPushButton("Load Card Image")
-        load_card_image_btn.clicked.connect(self.load_card_image)
-        card_image_layout.addWidget(load_card_image_btn)
+        # Card data control
+        card_data_group = QWidget()
+        card_data_layout = QVBoxLayout()
+        card_data_group.setLayout(card_data_layout)
 
-        # Card image preview label
-        self.card_image_label = QLabel()
-        self.card_image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        card_image_layout.addWidget(self.card_image_label)
+        # Load card data button
+        load_card_data_btn = QPushButton("Load Card Data")
+        load_card_data_btn.clicked.connect(self.load_card_data)
+        card_data_layout.addWidget(load_card_data_btn)
 
-        data_layout.addWidget(card_image_group)
+        # Card data table
+        self.card_data_table = QTableWidget()
+        self.card_data_table.setColumnCount(1)
+        self.card_data_table.setHorizontalHeaderLabels(["Card Data"])
+        card_data_layout.addWidget(self.card_data_table)
+
+        layout.addWidget(card_data_group)
+
+        # Card preview
+        preview_group = QWidget()
+        preview_layout = QHBoxLayout()
+        preview_group.setLayout(preview_layout)
+
+        # Card preview label
+        self.card_preview_label = QLabel()
+        self.card_preview_label.setFixedSize(600, 800)  # Set fixed size for card preview
+        preview_layout.addWidget(self.card_preview_label)
+
+        # Card properties label
+        self.card_properties_label = QLabel()
+        self.card_properties_label.setTextFormat(Qt.TextFormat.RichText)
+        preview_layout.addWidget(self.card_properties_label)
+
+        layout.addWidget(preview_group)
 
         # PDF page size controls
         pdf_page_size_group = QWidget()
@@ -321,6 +195,7 @@ class CardMaker(QMainWindow):
         # PDF page size combo box
         self.pdf_page_size_combo = QComboBox()
         self.pdf_page_size_combo.addItems(list(PDF_PAGE_SIZES.keys()))
+        pdf_page_size_layout.addWidget(QLabel("PDF Page Size:"))
         pdf_page_size_layout.addWidget(self.pdf_page_size_combo)
 
         # Custom PDF page size controls
@@ -328,74 +203,53 @@ class CardMaker(QMainWindow):
         custom_pdf_page_size_layout = QHBoxLayout()
         custom_pdf_page_size_group.setLayout(custom_pdf_page_size_layout)
 
-        self.custom_pdf_width_spin = QSpinBox()
+        self.custom_pdf_width_spin = QDoubleSpinBox()
         self.custom_pdf_width_spin.setRange(100, 3000)
-        self.custom_pdf_width_spin.setValue(210)
+        self.custom_pdf_width_spin.setValue(825)
         custom_pdf_page_size_layout.addWidget(QLabel("Width:"))
         custom_pdf_page_size_layout.addWidget(self.custom_pdf_width_spin)
 
-        self.custom_pdf_height_spin = QSpinBox()
+        self.custom_pdf_height_spin = QDoubleSpinBox()
         self.custom_pdf_height_spin.setRange(100, 3000)
-        self.custom_pdf_height_spin.setValue(297)
+        self.custom_pdf_height_spin.setValue(1125)
         custom_pdf_page_size_layout.addWidget(QLabel("Height:"))
         custom_pdf_page_size_layout.addWidget(self.custom_pdf_height_spin)
 
         pdf_page_size_layout.addWidget(custom_pdf_page_size_group)
 
-        data_layout.addWidget(pdf_page_size_group)
+        layout.addWidget(pdf_page_size_group)
 
-        left_layout.addWidget(template_group)
-        left_layout.addWidget(data_group)
+        # Buttons for card preview, PDF export, etc.
+        buttons_group = QWidget()
+        buttons_layout = QHBoxLayout()
+        buttons_group.setLayout(buttons_layout)
 
-        # Right panel for card preview and navigation
-        right_panel = QWidget()
-        right_layout = QVBoxLayout()
-        right_panel.setLayout(right_layout)
+        # Preview card button
+        preview_card_btn = QPushButton("Preview Card")
+        preview_card_btn.clicked.connect(self.update_card_preview)
+        buttons_layout.addWidget(preview_card_btn)
 
-        # Card preview label
-        self.preview_label = QLabel()
-        self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        right_layout.addWidget(self.preview_label)
+        # Export PDF button
+        export_pdf_btn = QPushButton("Export PDF")
+        export_pdf_btn.clicked.connect(self.export_pdf)
+        buttons_layout.addWidget(export_pdf_btn)
 
-        # Card navigation buttons
-        card_nav_group = QWidget()
-        card_nav_layout = QHBoxLayout()
-        card_nav_group.setLayout(card_nav_layout)
+        layout.addWidget(buttons_group)
 
-        # Previous card button
-        prev_card_btn = QPushButton("Previous Card")
-        prev_card_btn.clicked.connect(self.show_previous_card)
-        card_nav_layout.addWidget(prev_card_btn)
+        # Initialize template and demo data
+        self.template = CardTemplate({})  # Initialize an empty CardTemplate object with default values
+        self.demo_data_loaded = False
+        self.card_data = []
+        self.current_card_index = 0
 
-        # Next card button
-        next_card_btn = QPushButton("Next Card")
-        next_card_btn.clicked.connect(self.show_next_card)
-        card_nav_layout.addWidget(next_card_btn)
-
-        right_layout.addWidget(card_nav_group)
-
-        # Layers table
-        self.layers_table = QTableWidget()
-        self.layers_table.setColumnCount(5)
-        self.layers_table.setHorizontalHeaderLabels(
-            ["Path", "Type", "Position X", "Position Y", "Order"]
-        )
+        # Ensure the template is initialized before calling update_layers_table
         self.update_layers_table()
-
-        right_layout.addWidget(self.layers_table)
-
-        # Add panels to main layout
-        layout.addWidget(left_panel, 1)
-        layout.addWidget(right_panel, 2)
 
     def toggle_demo_data(self, state):
         if state == Qt.CheckState.Checked:
             self.load_demo_data()
         else:
             self.card_data = []
-
-        self.update_data_table()
-        self.update_preview()
 
     def load_demo_data(self):
         if not self.demo_data_loaded:
@@ -407,39 +261,73 @@ class CardMaker(QMainWindow):
         file_name, _ = QFileDialog.getOpenFileName(
             self, "Load Template", "", "JSON files (*.json);;SVG files (*.svg)"
         )
-        if file_name:
-            if file_name.endswith(".json"):
-                self.template.load_from_json(file_name)
-            elif file_name.endswith(".svg"):
-                self.template.add_layer(file_name, "svg")
-            self.update_layers_table()
-            self.update_preview()
+        if not file_name:
+            return
 
-    def add_layer(self):
+        try:
+            with open(file_name, "r") as f:
+                data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            QMessageBox.warning(None, "Error", f"Failed to load template: {e}")
+            return
+
+        if not all(key in data for key in ("width", "height", "bleed", "layers", "data_fields", "fonts", "data_field_positions", "card_image_path")):
+            QMessageBox.warning(None, "Error", "Invalid template format")
+            return
+
+        if not self.template:
+            self.template = CardTemplate(data)
+        else:
+            self.template.update(data)  # Update the existing template with the new data
+
+#        self.template = CardTemplate(data)
+        self.update_layers_table()
+        self.update_data_table()
+        self.update_preview()
+
+    def load_card_data(self):
         file_name, _ = QFileDialog.getOpenFileName(
-            self, "Add Layer", "", "Image files (*.png *.svg)"
+            self, "Load Card Data", "", "CSV files (*.csv)"
         )
-        if file_name:
-            layer_type = "svg" if file_name.lower().endswith(".svg") else "png"
-            position = (0, 0)  # Default position
+        if not file_name:
+            return
 
-            action = self.AddLayerAction(self, file_name, layer_type, position)
-            self.undo_stack.append(action)
-
-    def load_data(self):
-        file_name, _ = QFileDialog.getOpenFileName(
-            self, "Import Data", "", "CSV files (*.csv);;Excel files (*.xlsx)"
-        )
-        if file_name:
-            if file_name.lower().endswith(".csv"):
-                df = pd.read_csv(file_name)
-            else:
-                df = pd.read_excel(file_name)
-
+        try:
+            df = pd.read_csv(file_name)
             self.card_data = df.to_dict("records")
-            self.demo_data_loaded = False
-            self.update_data_table()
-            self.update_preview()
+            self.update_card_data_table()
+            self.update_card_preview()
+        except (FileNotFoundError, pd.errors.ParserError) as e:
+            QMessageBox.warning(None, "Error", f"Failed to load card data: {e}")
+
+    def update_card_data_table(self):
+        if not self.card_data:
+            return
+
+        self.card_data_table.setRowCount(len(self.card_data))
+
+        for i, card in enumerate(self.card_data):
+            item = QTableWidgetItem(json.dumps(card, indent=4))
+            item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEditable)
+            self.card_data_table.setItem(i, 0, item)
+
+    def update_card_preview(self):
+        if not self.template or not self.card_data:
+            return
+
+        card_data = self.card_data[self.current_card_index]
+        image = self.render_card(card_data, include_bleed=False, data_field_position=None, font="Default")
+        pixmap = QPixmap.fromImage(image)
+        scaled_pixmap = pixmap.scaled(
+            self.card_preview_label.size(),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        self.card_preview_label.setPixmap(scaled_pixmap)
+
+        # Update card properties label
+        properties_text = "<br>".join(f"<b>{key}:</b> {value}" for key, value in card_data.items())
+        self.card_properties_label.setText(f"<div style='white-space: pre-wrap;'>Properties:<br>{properties_text}</div>")
 
     def update_data_table(self):
         if not self.card_data:
@@ -455,18 +343,177 @@ class CardMaker(QMainWindow):
                 item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEditable)
                 self.data_table.setItem(i, j, item)
 
-    def update_card_size(self):
-        self.template.width = self.width_spin.value()
-        self.template.height = self.height_spin.value()
-        self.update_data_field_position()
+    def update_layers_table(self):
+        if not self.template:
+            return
+
+        self.layers_table.setRowCount(len(self.template.layers))
+
+        for i, layer in enumerate(self.template.layers):
+            for j, (key, value) in enumerate(layer.items()):
+                item = QTableWidgetItem(str(value))
+                item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable)
+                self.layers_table.setItem(i, j, item)
+
+    def update_preview(self):
+        if not self.template or not self.card_data:
+            return
+
+        card_data = self.card_data[self.current_card_index]
+        image = self.render_card(card_data, include_bleed=False, data_field_position=None, font="Default")
+        pixmap = QPixmap.fromImage(image)
+        scaled_pixmap = pixmap.scaled(
+            self.preview_label.size(),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        self.preview_label.setPixmap(scaled_pixmap)
+
+    def export_png(self):
+        if not self.card_data:
+            return
+
+        dir_name = QFileDialog.getExistingDirectory(
+            self, "Select Export Directory"
+        )
+        if not dir_name:
+            return
+
+        for i, card in enumerate(self.card_data):
+            image = self.render_card(card)
+            image.save(f"{dir_name}/card_{i+1}.png")
+
+    def export_pdf(self):
+        if not self.card_data:
+            return
+
+        file_name, _ = QFileDialog.getSaveFileName(
+            self, "Export PDF", "", "PDF files (*.pdf)"
+        )
+        if not file_name:
+            return
+
+        writer = QPdfWriter(file_name)
+        page_size = self.get_pdf_page_size()
+        writer.setPageSize(page_size)
+
+        # Convert template dimensions from units to millimeters if necessary
+        width_mm = self.template.width + 2 * self.template.bleed
+        height_mm = self.template.height + 2 * self.template.bleed
+
+        # Set page margins to zero
+        margins = QMarginsF(0, 0, 0, 0)
+        writer.setPageMargins(margins)
+
+        painter = QPainter(writer)
+        for card in self.card_data:
+            image = self.render_card(card, include_bleed=True)
+            painter.drawImage(QPointF(0, 0), image)
+            if card != self.card_data[-1]:  # Don't add a new page after the last card
+                writer.newPage()
+        painter.end()
+
+    def move_layer_up(self):
+        selected_row = self.layers_table.currentRow()
+        if selected_row > 0:
+            self.template.layers[selected_row - 1], self.template.layers[selected_row] = (
+                self.template.layers[selected_row],
+                self.template.layers[selected_row - 1],
+            )
+            self.update_layers_table()
+            self.update_preview()
+
+    def move_layer_down(self):
+        selected_row = self.layers_table.currentRow()
+        if selected_row < len(self.template.layers) - 1:
+            self.template.layers[selected_row + 1], self.template.layers[selected_row] = (
+                self.template.layers[selected_row],
+                self.template.layers[selected_row + 1],
+            )
+            self.update_layers_table()
+            self.update_preview()
+
+    def add_data_field(self):
+        field_name, ok = QInputDialog.getText(
+            self, "Add Data Field", "Enter the new data field name:"
+        )
+        if ok and field_name:
+            self.template.data_fields.append(field_name)
+            self.data_fields_combo.addItem(field_name)
+            self.update_data_table()
+
+    def remove_data_field(self):
+        selected_field = self.data_fields_combo.currentText()
+        if selected_field:
+            self.template.data_fields.remove(selected_field)
+            self.data_fields_combo.removeItem(self.data_fields_combo.findText(selected_field))
+            self.update_data_table()
+
+    def add_layer(self):
+        file_name, _ = QFileDialog.getOpenFileName(
+            self, "Add Layer", "", "Image files (*.png *.svg)"
+        )
+        if not file_name:
+            return
+
+        layer_type = "svg" if file_name.lower().endswith(".svg") else "png"
+        position = (0, 0)  # Default position
+        order = len(self.template.layers)  # Add order for new layer
+
+        self.template.layers.append(
+            {
+                "path": file_name,
+                "type": layer_type,
+                "position": position,
+                "order": order,
+            }
+        )
+        self.update_layers_table()
         self.update_preview()
 
-    def update_data_field_position(self):
-        field = self.template.data_fields[0]
-        self.template.set_data_field_position(field, self.data_field_x_spin.value(), self.data_field_y_spin.value())
-        self.update_preview()
+    def load_card_image(self):
+        file_name, _ = QFileDialog.getOpenFileName(
+            self, "Load Card Image", "", "Image files (*.png *.jpg *.jpeg)"
+        )
+        if not file_name:
+            return
 
-    def render_card(self, card_data=None, include_bleed=False, data_field_position=None, font="Default"):
+        self.template.set_card_image_path(file_name)
+        pixmap = QPixmap(file_name)
+        scaled_pixmap = pixmap.scaled(
+            self.card_image_label.size(),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        self.card_image_label.setPixmap(scaled_pixmap)
+
+    def show_previous_card(self):
+        if self.current_card_index > 0:
+            self.current_card_index -= 1
+            self.update_preview()
+
+    def show_next_card(self):
+        if self.current_card_index < len(self.card_data) - 1:
+            self.current_card_index += 1
+            self.update_preview()
+
+    def get_pdf_page_size(self):
+        page_size = self.pdf_page_size_combo.currentText()
+        if page_size == "Custom":
+            return QPageSize(QSizeF(
+                self.custom_pdf_width_spin.value(),
+                self.custom_pdf_height_spin.value()
+            ))
+        else:
+            return QPageSize(PDF_PAGE_SIZES[page_size])
+
+    def render_card(
+        self,
+        card_data=None,
+        include_bleed=False,
+        data_field_position=None,
+        font="Default",
+    ):
         width = self.template.width
         height = self.template.height
 
@@ -512,150 +559,8 @@ class CardMaker(QMainWindow):
         painter.end()
         return image
 
-    def update_preview(self):
-        if not self.card_data:
-            return
-
-        card_data = self.card_data[self.current_card_index]
-        image = self.render_card(card_data, data_field_position=(self.data_field_x_spin.value(), self.data_field_y_spin.value()))
-        pixmap = QPixmap.fromImage(image)
-        scaled_pixmap = pixmap.scaled(
-            self.preview_label.size(),
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
-        )
-        self.preview_label.setPixmap(scaled_pixmap)
-
-    def export_png(self):
-        if not self.card_data:
-            return
-
-        dir_name = QFileDialog.getExistingDirectory(
-            self, "Select Export Directory"
-        )
-        if dir_name:
-            for i, card in enumerate(self.card_data):
-                image = self.render_card(card)
-                image.save(f"{dir_name}/card_{i+1}.png")
-
-    def export_pdf(self):
-        if not self.card_data:
-            return
-
-        file_name, _ = QFileDialog.getSaveFileName(
-            self, "Export PDF", "", "PDF files (*.pdf)"
-        )
-        if file_name:
-            writer = QPdfWriter(file_name)
-            writer.setPageSize(self.get_pdf_page_size())
-            writer.setPageSizeMM(QSizeF(self.template.width + 2 * self.template.bleed, self.template.height + 2 * self.template.bleed))
-
-            painter = QPainter(writer)
-            for card in self.card_data:
-                image = self.render_card(card, include_bleed=True)
-                painter.drawImage(QPointF(0, 0), image)
-                writer.newPage()
-            painter.end()
-
-    def move_layer_up(self):
-        selected_row = self.layers_table.currentRow()
-        if selected_row > 0:
-            self.template.layers[selected_row - 1], self.template.layers[selected_row] = (
-                self.template.layers[selected_row],
-                self.template.layers[selected_row - 1],
-            )
-            self.update_layers_table()
-            self.update_preview()
-
-    def move_layer_down(self):
-        selected_row = self.layers_table.currentRow()
-        if selected_row < len(self.template.layers) - 1:
-            self.template.layers[selected_row + 1], self.template.layers[selected_row] = (
-                self.template.layers[selected_row],
-                self.template.layers[selected_row + 1],
-            )
-            self.update_layers_table()
-            self.update_preview()
-
-    def add_data_field(self):
-        field_name, ok = QInputDialog.getText(
-            self, "Add Data Field", "Enter the new data field name:"
-        )
-        if ok and field_name:
-            self.template.data_fields.append(field_name)
-            self.data_fields_combo.addItem(field_name)
-            self.update_data_table()
-
-    def remove_data_field(self):
-        selected_field = self.data_fields_combo.currentText()
-        if selected_field:
-            self.template.data_fields.remove(selected_field)
-            self.data_fields_combo.removeItem(self.data_fields_combo.findText(selected_field))
-            self.update_data_table()
-
-    def update_layers_table(self):
-        self.layers_table.setRowCount(len(self.template.layers))
-
-        for i, layer in enumerate(self.template.layers):
-            for j, (key, value) in enumerate(layer.items()):
-                item = QTableWidgetItem(str(value))
-                item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable)
-                self.layers_table.setItem(i, j, item)
-
-    def load_card_image(self):
-        file_name, _ = QFileDialog.getOpenFileName(
-            self, "Load Card Image", "", "Image files (*.png *.jpg *.jpeg)"
-        )
-        if file_name:
-            self.template.set_card_image_path(file_name)
-            pixmap = QPixmap(file_name)
-            scaled_pixmap = pixmap.scaled(
-                self.card_image_label.size(),
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            self.card_image_label.setPixmap(scaled_pixmap)
-
-    def show_previous_card(self):
-        if self.current_card_index > 0:
-            self.current_card_index -= 1
-            self.update_preview()
-
-    def show_next_card(self):
-        if self.current_card_index < len(self.card_data) - 1:
-            self.current_card_index += 1
-            self.update_preview()
-
-    def get_pdf_page_size(self):
-        page_size = self.pdf_page_size_combo.currentText()
-        if page_size == "Custom":
-            return QSizeF(self.custom_pdf_width_spin.value(), self.custom_pdf_height_spin.value())
-        else:
-            return PDF_PAGE_SIZES[page_size]
-
-    # ... (other methods remain the same)
-
-    class AddLayerAction:
-        def __init__(self, card_maker, path, layer_type, position):
-            self.card_maker = card_maker
-            self.path = path
-            self.layer_type = layer_type
-            self.position = position
-
-        def undo(self, card_maker):
-            card_maker.template.layers.remove(
-                next(
-                    (layer for layer in card_maker.template.layers if layer["path"] == self.path),
-                    None,
-                )
-            )
-            card_maker.update_layers_table()
-            card_maker.update_preview()
-
-        def redo(self, card_maker):
-            card_maker.template.add_layer(self.path, self.layer_type, self.position)
-            card_maker.update_layers_table()
-            card_maker.update_preview()
+    def __del__(self):
+        pass
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
