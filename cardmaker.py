@@ -58,7 +58,7 @@ class CardMaker(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("CardMaker")
-        self.setGeometry(100, 100, 1400, 800)  # Increased size to accommodate card preview
+        self.setGeometry(100, 100, 1400, 800)
 
         # Create main widget and layout
         main_widget = QWidget()
@@ -189,6 +189,7 @@ class CardMaker(QMainWindow):
         self.card_data_table.setColumnCount(1)
         self.card_data_table.setHorizontalHeaderLabels(["Card Data"])
         self.card_data_table.cellChanged.connect(self.update_card_preview)
+        self.card_data_table.cellDoubleClicked.connect(self.open_image_selector)
         card_data_layout.addWidget(self.card_data_table)
 
         left_layout.addWidget(card_data_group)
@@ -271,7 +272,7 @@ class CardMaker(QMainWindow):
 
         # Card preview label
         self.card_preview_label = QLabel()
-        self.card_preview_label.setFixedSize(600, 800)  # Set fixed size for card preview
+        self.card_preview_label.setFixedSize(600, 800)
         right_layout.addWidget(self.card_preview_label)
 
         # Card properties label
@@ -283,13 +284,21 @@ class CardMaker(QMainWindow):
         main_layout.addWidget(right_column)
 
         # Initialize template and demo data
-        self.template = CardTemplate({})  # Initialize an empty CardTemplate object with default values
+        self.template = CardTemplate({})
         self.demo_data_loaded = False
         self.card_data = []
         self.current_card_index = 0
 
         # Ensure the template is initialized before calling update_layers_table
         self.update_layers_table()
+
+    def open_image_selector(self, row, column):
+        if column == self.card_data_table.columnCount() - 1:  # Assuming the last column is for the image path
+            file_name, _ = QFileDialog.getOpenFileName(
+                self, "Select Image", "", "Image files (*.png *.jpg *.jpeg)"
+            )
+            if file_name:
+                self.card_data_table.setItem(row, column, QTableWidgetItem(file_name))
 
     def toggle_demo_data(self, state):
         if state == Qt.CheckState.Checked:
@@ -325,7 +334,7 @@ class CardMaker(QMainWindow):
         if not self.template:
             self.template = CardTemplate(data)
         else:
-            self.template.update(data)  # Update the existing template with the new data
+            self.template.update(data)
 
         self.update_layers_table()
         self.update_card_data_table()
@@ -356,6 +365,7 @@ class CardMaker(QMainWindow):
         if not file_name:
             return
 
+        self.update_card_data_from_table()
         df = pd.DataFrame(self.card_data)
         df.to_csv(file_name, index=False)
 
@@ -366,8 +376,18 @@ class CardMaker(QMainWindow):
         if not file_name:
             return
 
+        self.update_card_data_from_table()
         df = pd.DataFrame(self.card_data)
         df.to_csv(file_name, index=False)
+
+    def update_card_data_from_table(self):
+        for row in range(self.card_data_table.rowCount()):
+            card_data = {}
+            for column in range(self.card_data_table.columnCount()):
+                item = self.card_data_table.item(row, column)
+                if item:
+                    card_data[self.card_data_table.horizontalHeaderItem(column).text()] = item.text()
+            self.card_data[row] = card_data
 
     def load_card_data(self):
         file_name, _ = QFileDialog.getOpenFileName(
@@ -657,6 +677,14 @@ class CardMaker(QMainWindow):
                     QPointF(layer["position"][0], layer["position"][1]),
                     pixmap,
                 )
+            elif layer.get("card_illustration"):
+                if "Illustration" in card_data:
+                    illustration_path = card_data["Illustration"]
+                    illustration_pixmap = QPixmap(illustration_path)
+                    painter.drawPixmap(
+                        QPointF(layer["position"][0], layer["position"][1]),
+                        illustration_pixmap,
+                    )
 
         # Draw card data if provided
         if card_data:
@@ -679,15 +707,6 @@ class CardMaker(QMainWindow):
                             height - 2 * self.template.bleed,
                         )
                         painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, str(card_data.get(field, "")))
-
-            # Draw illustration if provided
-            if "illustration" in card_data and card_data["illustration"]:
-                illustration_path = card_data["illustration"]
-                illustration_pixmap = QPixmap(illustration_path)
-                painter.drawPixmap(
-                    QPointF(0, 0),
-                    illustration_pixmap,
-                )
 
         painter.end()
         return image
