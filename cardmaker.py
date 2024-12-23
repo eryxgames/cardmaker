@@ -53,23 +53,26 @@ class CardTemplate:
         self.fonts = {}
 
     def load_from_json(self, file_path):
-        with open(file_path, "r") as f:
-            data = json.load(f)
+        try:
+            with open(file_path, "r") as f:
+                data = json.load(f)
 
-        self.width = data["width"]
-        self.height = data["height"]
-        self.bleed = data["bleed"]
-        self.layers = [
-            {
-                "path": layer["path"],
-                "type": layer["type"],
-                "position": layer["position"],
-                "order": layer["order"],
-            }
-            for layer in data["layers"]
-        ]
-        self.data_fields = data["data_fields"]
-        self.fonts = data["fonts"]
+            self.width = data["width"]
+            self.height = data["height"]
+            self.bleed = data["bleed"]
+            self.layers = [
+                {
+                    "path": layer["path"],
+                    "type": layer["type"],
+                    "position": layer["position"],
+                    "order": layer["order"],
+                }
+                for layer in data["layers"]
+            ]
+            self.data_fields = data["data_fields"]
+            self.fonts = data["fonts"]
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            QMessageBox.warning(None, "Error", f"Failed to load template: {e}")
 
     def save_to_json(self, file_path):
         data = {
@@ -88,8 +91,11 @@ class CardTemplate:
             "data_fields": self.data_fields,
             "fonts": self.fonts,
         }
-        with open(file_path, "w") as f:
-            json.dump(data, f)
+        try:
+            with open(file_path, "w") as f:
+                json.dump(data, f)
+        except IOError as e:
+            QMessageBox.warning(None, "Error", f"Failed to save template: {e}")
 
     def add_layer(self, path, layer_type, position=(0, 0)):
         self.layers.append(
@@ -240,6 +246,13 @@ class CardMaker(QMainWindow):
         # Add panels to main layout
         layout.addWidget(left_panel, 1)
         layout.addWidget(right_panel, 2)
+
+        self.layers_table = QTableWidget()
+        self.layers_table.setColumnCount(4)
+        self.layers_table.setHorizontalHeaderLabels(
+            ["Path", "Type", "Position X", "Position Y", "Order"]
+        )
+        self.update_layers_table()
 
         self.update_preview()
 
@@ -482,7 +495,11 @@ class CardMaker(QMainWindow):
             self.update_data_table()
 
     def update_layers_table(self):
-        self.layers_table.setRowCount(len(self.template.layers))
+        try:
+            self.layers_table.setRowCount(len(self.template.layers))
+        except AttributeError:
+            pass
+
         self.layers_table.setColumnCount(4)
         self.layers_table.setHorizontalHeaderLabels(
             ["Path", "Type", "Position X", "Position Y", "Order"]
