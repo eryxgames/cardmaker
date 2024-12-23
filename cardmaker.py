@@ -54,6 +54,13 @@ class CardMaker(QMainWindow):
         self.setWindowTitle("CardMaker")
         self.setGeometry(100, 100, 1400, 800)
 
+        # Initialize attributes first
+        self.demo_data_loaded = False
+        self.template = None
+        self.card_data = []
+        self.current_card_index = 0
+        self._image_cache = {}  # Add image caching
+
         # Create main widget and layout
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
@@ -286,12 +293,7 @@ class CardMaker(QMainWindow):
 
         # Initialize template and demo data
         self.template = CardTemplate({})
-        self.demo_data_loaded = False
-        self.card_data = []
-        self.current_card_index = 0
-
-        # Ensure the template is initialized before calling update_layers_table
-        self.update_layers_table()
+        self.load_demo_data()
 
     def card_data_table_cell_changed(self, row, column):
         self.update_card_data_from_table()
@@ -308,7 +310,74 @@ class CardMaker(QMainWindow):
                 self.update_card_preview()
         # Update card preview and layers_table with the new image path
         self.update_card_preview()
-        self.update_layers_table()        
+        self.update_layers_table()
+
+    def update_layers_table(self, card_data=None):
+        """
+        Single implementation of update_layers_table with proper error handling
+        """
+        try:
+            if card_data is None:
+                if not self.card_data or self.current_card_index >= len(self.card_data):
+                    return
+                card_data = self.card_data[self.current_card_index]
+
+            self.layers_table.setUpdatesEnabled(False)  # Prevent multiple redraws
+            try:
+                self.layers_table.setRowCount(0)
+                for i, card in enumerate(self.card_data):
+                    self._add_layer_row(i, card)
+            finally:
+                self.layers_table.setUpdatesEnabled(True)
+
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to update layers table: {str(e)}")
+
+    def _add_layer_row(self, row_index, card_data):
+        """Helper method to add a single row to layers table"""
+        self.layers_table.insertRow(row_index)
+
+        # Validate positions
+        try:
+            pos_x = float(card_data.get("Position X", 0))
+            pos_y = float(card_data.get("Position Y", 0))
+        except (ValueError, TypeError):
+            pos_x = pos_y = 0
+
+        # Create and set table items with proper validation
+        items = [
+            (card_data.get("Illustration", ""), Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsEditable),
+            ("image", Qt.ItemFlag.ItemIsEnabled),
+            (str(pos_x), Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsEditable),
+            (str(pos_y), Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsEditable),
+            (str(row_index), Qt.ItemFlag.ItemIsEnabled),
+            ("True", Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsEditable)
+        ]
+
+        for col, (value, flags) in enumerate(items):
+            item = QTableWidgetItem(value)
+            item.setFlags(flags)
+            self.layers_table.setItem(row_index, col, item)
+
+        move_up_btn = QPushButton("Up")
+        move_up_btn.setStyleSheet("font-size: 16px; height: 40px;")
+        move_up_btn.clicked.connect(lambda _, row=row_index: self.move_layer_up(row))
+
+        move_down_btn = QPushButton("Down")
+        move_down_btn.setStyleSheet("font-size: 16px; height: 40px;")
+        move_down_btn.clicked.connect(lambda _, row=row_index: self.move_layer_down(row))
+
+        actions_layout = QVBoxLayout()
+        actions_layout.addWidget(move_up_btn)
+        actions_layout.addWidget(move_down_btn)
+        actions_widget = QWidget()
+        actions_widget.setLayout(actions_layout)
+        self.layers_table.setCellWidget(row_index, 6, actions_widget)
+
+        delete_btn = QPushButton("Delete")
+        delete_btn.setStyleSheet("font-size: 16px; height: 40px;")
+        delete_btn.clicked.connect(lambda _, row=row_index: self.delete_layer(row))
+        self.layers_table.setCellWidget(row_index, 7, delete_btn)
 
     def update_card_data_from_table(self):
         for row in range(self.card_data_table.rowCount()):
@@ -329,10 +398,19 @@ class CardMaker(QMainWindow):
 
     def load_demo_data(self):
         if not self.demo_data_loaded:
-            df = pd.read_csv(DEMO_CSV_FILE)
-            self.card_data = df.to_dict("records")
-            self.demo_data_loaded = True
-            self.update_card_data_table()
+            try:
+                # Use pandas with explicit encoding and error handling
+                df = pd.read_csv(DEMO_CSV_FILE, encoding='utf-8', on_bad_lines='skip')
+                self.card_data = df.to_dict("records")
+                if not self.card_data:
+                    raise ValueError("No data loaded from CSV file")
+                self.demo_data_loaded = True
+                self.update_card_data_table()
+                print(f"Loaded {len(self.card_data)} cards from demo data")
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Failed to load demo data: {str(e)}")
+                self.card_data = []
+                self.demo_data_loaded = False
 
     def load_template(self):
         file_name, _ = QFileDialog.getOpenFileName(
@@ -434,93 +512,46 @@ class CardMaker(QMainWindow):
         if not self.template or not self.card_data:
             return
 
-        card_data = self.card_data[self.current_card_index]
-        image = self.render_card(card_data, include_bleed=False, data_field_position=None, font="Default")
-        pixmap = QPixmap.fromImage(image)
-        scaled_pixmap = pixmap.scaled(
-            self.card_preview_label.size(),
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
-        )
-        self.card_preview_label.setPixmap(scaled_pixmap)
+        try:
+            card_data = self.card_data[self.current_card_index]
+            # Initialize provided_positions properly
+            provided_positions = {}
+            if hasattr(self.template, 'data_fields'):
+                for field in self.template.data_fields:
+                    provided_positions[field] = (0, 0)
 
-        # Update card properties label with the new card_data
-        properties_text = "<br>".join(f"<b>{key}:</b> {value}" for key, value in self.card_data[self.current_card_index].items())
-        self.card_properties_label.setText(f"<div style='white-space: pre-wrap;'>Properties:<br>{properties_text}</div>")
+            image = self.render_card(
+                card_data,
+                include_bleed=False,
+                data_field_position=None,
+                font="Default",
+                provided_positions=provided_positions
+            )
+            pixmap = QPixmap.fromImage(image)
+            scaled_pixmap = pixmap.scaled(
+                self.card_preview_label.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            self.card_preview_label.setPixmap(scaled_pixmap)
 
-    def update_data_table(self):
-        if not self.card_data:
-            return
+            # Update card properties label
+            properties_text = "<br>".join(f"<b>{key}:</b> {value}" for key, value in card_data.items())
+            self.card_properties_label.setText(f"<div style='white-space: pre-wrap;'>Properties:<br>{properties_text}</div>")
 
-        self.card_data_table.setRowCount(len(self.card_data))
-        self.card_data_table.setColumnCount(len(self.card_data[0]))
-        self.card_data_table.setHorizontalHeaderLabels(self.card_data[0].keys())
+            # Update layers table with the new card_data
+            self.update_layers_table(card_data)
 
-        for i, card in enumerate(self.card_data):
-            for j, (key, value) in enumerate(card.items()):
-                item = QTableWidgetItem(str(value))
-                item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEditable)
-                self.card_data_table.setItem(i, j, item)
-
-    def update_layers_table(self):
-        if not self.template:
-            return
-
-        self.layers_table.setRowCount(len(self.template.layers))
-
-        for i, layer in enumerate(self.template.layers):
-            item_path = QTableWidgetItem(layer["path"])
-            item_path.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEditable)
-            self.layers_table.setItem(i, 0, item_path)
-
-            item_type = QTableWidgetItem(layer["type"])
-            item_type.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable)
-            self.layers_table.setItem(i, 1, item_type)
-
-            item_pos_x = QTableWidgetItem(str(layer["position"][0]))
-            item_pos_x.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEditable)
-            self.layers_table.setItem(i, 2, item_pos_x)
-
-            item_pos_y = QTableWidgetItem(str(layer["position"][1]))
-            item_pos_y.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEditable)
-            self.layers_table.setItem(i, 3, item_pos_y)
-
-            item_order = QTableWidgetItem(str(layer["order"]))
-            item_order.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable)
-            self.layers_table.setItem(i, 4, item_order)
-
-            item_visible = QTableWidgetItem("True" if layer.get("visible", True) else "False")
-            item_visible.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEditable)
-            self.layers_table.setItem(i, 5, item_visible)
-
-            move_up_btn = QPushButton("Up")
-            move_up_btn.setStyleSheet("font-size: 16px; height: 40px;")
-            move_up_btn.clicked.connect(lambda _, row=i: self.move_layer_up(row))
-
-            move_down_btn = QPushButton("Down")
-            move_down_btn.setStyleSheet("font-size: 16px; height: 40px;")
-            move_down_btn.clicked.connect(lambda _, row=i: self.move_layer_down(row))
-
-            actions_layout = QVBoxLayout()
-            actions_layout.addWidget(move_up_btn)
-            actions_layout.addWidget(move_down_btn)
-            actions_widget = QWidget()
-            actions_widget.setLayout(actions_layout)
-            self.layers_table.setCellWidget(i, 6, actions_widget)
-
-            delete_btn = QPushButton("Delete")
-            delete_btn.setStyleSheet("font-size: 16px; height: 40px;")
-            delete_btn.clicked.connect(lambda _, row=i: self.delete_layer(row))
-            self.layers_table.setCellWidget(i, 7, delete_btn)
-        # Update card preview with the new layers
-        self.update_card_preview()        
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to update card preview: {str(e)}")
 
     def update_preview(self):
         if not self.template or not self.card_data:
             return
 
         card_data = self.card_data[self.current_card_index]
-        image = self.render_card(card_data, include_bleed=False, data_field_position=None, font="Default")
+        provided_positions = {field: (0, 0) for field in self.template.data_fields}  # Initialize provided_positions
+        image = self.render_card(card_data, include_bleed=False, data_field_position=None, font="Default", provided_positions=provided_positions)
         pixmap = QPixmap.fromImage(image)
         scaled_pixmap = pixmap.scaled(
             self.card_preview_label.size(),
@@ -660,11 +691,13 @@ class CardMaker(QMainWindow):
         if self.current_card_index > 0:
             self.current_card_index -= 1
             self.update_preview()
+            self.update_card_preview()
 
     def show_next_card(self):
         if self.current_card_index < len(self.card_data) - 1:
             self.current_card_index += 1
             self.update_preview()
+            self.update_card_preview()
 
     def get_pdf_page_size(self):
         page_size = self.pdf_page_size_combo.currentText()
@@ -682,6 +715,8 @@ class CardMaker(QMainWindow):
         include_bleed=False,
         data_field_position=None,
         font="Default",
+        use_provided_positions=False,
+        provided_positions=None,
     ):
         width = self.template.width
         height = self.template.height
@@ -690,6 +725,13 @@ class CardMaker(QMainWindow):
             width += 2 * self.template.bleed
             height += 2 * self.template.bleed
 
+        # Initialize provided_positions if None
+        if provided_positions is None:
+            provided_positions = {}
+            if hasattr(self.template, 'data_fields'):
+                for field in self.template.data_fields:
+                    provided_positions[field] = (0, 0)
+
         image = QImage(width, height, QImage.Format.Format_ARGB32)
         image.fill(Qt.GlobalColor.transparent)
 
@@ -697,47 +739,48 @@ class CardMaker(QMainWindow):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         # Draw layers
-        for layer in self.template.layers:
-            if layer.get("visible", True):
-                if layer["type"] == "svg":
-                    renderer = QSvgRenderer(layer["path"])
-                    renderer.render(painter)
-                elif layer["type"] == "png":
-                    pixmap = QPixmap(layer["path"])
-                    painter.drawPixmap(
-                        QPointF(layer["position"][0], layer["position"][1]),
-                        pixmap,
-                    )
-                elif layer.get("card_illustration"):
-                    if "Illustration" in card_data:
-                        illustration_path = card_data["Illustration"]
-                        illustration_pixmap = QPixmap(illustration_path)
-                        painter.drawPixmap(
-                            QPointF(layer["position"][0], layer["position"][1]),
-                            illustration_pixmap,
-                        )
+        if hasattr(self.template, 'layers'):
+            for layer in self.template.layers:
+                if layer.get("visible", True):
+                    if layer["type"] == "svg":
+                        renderer = QSvgRenderer(layer["path"])
+                        renderer.render(painter)
+                    elif layer["type"] == "png":
+                        pixmap = QPixmap(layer["path"])
+                        pos_x = layer["position"][0] if not use_provided_positions else provided_positions.get(layer["id"], (0, 0))[0]
+                        pos_y = layer["position"][1] if not use_provided_positions else provided_positions.get(layer["id"], (0, 0))[1]
+                        painter.drawPixmap(QPointF(pos_x, pos_y), pixmap)
 
         # Draw card data if provided
-        if card_data:
+        if card_data and hasattr(self.template, 'data_fields'):
             font_id = self.template.fonts.get(font, QFont("Default"))
-            font = QFont(font_id)
-            font.setPointSize(24)  # Change font size
-
-            painter.setFont(font)
+            painter_font = QFont(font_id)
+            painter_font.setPointSize(24)
+            painter.setFont(painter_font)
             painter.setPen(QColor("black"))
 
-            # Ensure data_field_positions has the correct keys
-            if self.template.data_fields and self.template.data_field_positions:
-                for field in self.template.data_fields:
-                    if field in self.template.data_field_positions:
-                        position = self.template.data_field_positions[field]
-                        text_rect = QRectF(
-                            position[0],
-                            position[1],
-                            width - 2 * self.template.bleed,
-                            height - 2 * self.template.bleed,
-                        )
-                        painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, str(card_data.get(field, "")))
+            for field in self.template.data_fields:
+                if field in card_data:
+                    # Get position from template or provided positions
+                    pos_x, pos_y = (0, 0)  # Default position
+                    if hasattr(self.template, 'data_field_positions') and field in self.template.data_field_positions:
+                        pos_x = self.template.data_field_positions[field][0]
+                        pos_y = self.template.data_field_positions[field][1]
+                    elif field in provided_positions:
+                        pos_x = provided_positions[field][0]
+                        pos_y = provided_positions[field][1]
+
+                    text_rect = QRectF(
+                        pos_x,
+                        pos_y,
+                        width - 2 * self.template.bleed if include_bleed else width,
+                        height - 2 * self.template.bleed if include_bleed else height
+                    )
+                    painter.drawText(
+                        text_rect,
+                        Qt.AlignmentFlag.AlignCenter,
+                        str(card_data.get(field, ""))
+                    )
 
         painter.end()
         return image
@@ -786,8 +829,13 @@ class CardMaker(QMainWindow):
 
         preview_window.show()
 
+    def cleanup(self):
+        """Proper cleanup of resources"""
+        self._image_cache.clear()
+        # Clean up any other resources...
+
     def __del__(self):
-        pass
+        self.cleanup()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
