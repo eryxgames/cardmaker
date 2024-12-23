@@ -55,13 +55,18 @@ class CardMaker(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("CardMaker")
-        self.setGeometry(100, 100, 1200, 800)  # Increased size to accommodate card preview
+        self.setGeometry(100, 100, 1400, 800)  # Increased size to accommodate card preview
 
         # Create main widget and layout
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
-        layout = QVBoxLayout()
-        main_widget.setLayout(layout)
+        main_layout = QHBoxLayout()
+        main_widget.setLayout(main_layout)
+
+        # Left column for controls
+        left_column = QWidget()
+        left_layout = QVBoxLayout()
+        left_column.setLayout(left_layout)
 
         # Template selection and loading
         template_group = QWidget()
@@ -112,8 +117,8 @@ class CardMaker(QMainWindow):
         remove_data_field_btn.clicked.connect(self.remove_data_field)
         data_fields_layout.addWidget(remove_data_field_btn)
 
-        layout.addWidget(template_group)
-        layout.addWidget(data_fields_group)
+        left_layout.addWidget(template_group)
+        left_layout.addWidget(data_fields_group)
 
         # Layers control
         layers_group = QWidget()
@@ -150,7 +155,7 @@ class CardMaker(QMainWindow):
 
         layers_layout.addWidget(move_layer_group)
 
-        layout.addWidget(layers_group)
+        left_layout.addWidget(layers_group)
 
         # Card data control
         card_data_group = QWidget()
@@ -166,26 +171,10 @@ class CardMaker(QMainWindow):
         self.card_data_table = QTableWidget()
         self.card_data_table.setColumnCount(1)
         self.card_data_table.setHorizontalHeaderLabels(["Card Data"])
+        self.card_data_table.cellChanged.connect(self.update_card_preview)
         card_data_layout.addWidget(self.card_data_table)
 
-        layout.addWidget(card_data_group)
-
-        # Card preview
-        preview_group = QWidget()
-        preview_layout = QHBoxLayout()
-        preview_group.setLayout(preview_layout)
-
-        # Card preview label
-        self.card_preview_label = QLabel()
-        self.card_preview_label.setFixedSize(600, 800)  # Set fixed size for card preview
-        preview_layout.addWidget(self.card_preview_label)
-
-        # Card properties label
-        self.card_properties_label = QLabel()
-        self.card_properties_label.setTextFormat(Qt.TextFormat.RichText)
-        preview_layout.addWidget(self.card_properties_label)
-
-        layout.addWidget(preview_group)
+        left_layout.addWidget(card_data_group)
 
         # PDF page size controls
         pdf_page_size_group = QWidget()
@@ -217,7 +206,7 @@ class CardMaker(QMainWindow):
 
         pdf_page_size_layout.addWidget(custom_pdf_page_size_group)
 
-        layout.addWidget(pdf_page_size_group)
+        left_layout.addWidget(pdf_page_size_group)
 
         # Buttons for card preview, PDF export, etc.
         buttons_group = QWidget()
@@ -234,7 +223,47 @@ class CardMaker(QMainWindow):
         export_pdf_btn.clicked.connect(self.export_pdf)
         buttons_layout.addWidget(export_pdf_btn)
 
-        layout.addWidget(buttons_group)
+        # Export PNG button
+        export_png_btn = QPushButton("Export PNG")
+        export_png_btn.clicked.connect(self.export_png)
+        buttons_layout.addWidget(export_png_btn)
+
+        left_layout.addWidget(buttons_group)
+
+        # Navigation buttons
+        nav_buttons_group = QWidget()
+        nav_buttons_layout = QHBoxLayout()
+        nav_buttons_group.setLayout(nav_buttons_layout)
+
+        # Previous card button
+        prev_card_btn = QPushButton("Previous Card")
+        prev_card_btn.clicked.connect(self.show_previous_card)
+        nav_buttons_layout.addWidget(prev_card_btn)
+
+        # Next card button
+        next_card_btn = QPushButton("Next Card")
+        next_card_btn.clicked.connect(self.show_next_card)
+        nav_buttons_layout.addWidget(next_card_btn)
+
+        left_layout.addWidget(nav_buttons_group)
+
+        # Right column for card preview
+        right_column = QWidget()
+        right_layout = QVBoxLayout()
+        right_column.setLayout(right_layout)
+
+        # Card preview label
+        self.card_preview_label = QLabel()
+        self.card_preview_label.setFixedSize(600, 800)  # Set fixed size for card preview
+        right_layout.addWidget(self.card_preview_label)
+
+        # Card properties label
+        self.card_properties_label = QLabel()
+        self.card_properties_label.setTextFormat(Qt.TextFormat.RichText)
+        right_layout.addWidget(self.card_properties_label)
+
+        main_layout.addWidget(left_column)
+        main_layout.addWidget(right_column)
 
         # Initialize template and demo data
         self.template = CardTemplate({})  # Initialize an empty CardTemplate object with default values
@@ -256,6 +285,7 @@ class CardMaker(QMainWindow):
             df = pd.read_csv(DEMO_CSV_FILE)
             self.card_data = df.to_dict("records")
             self.demo_data_loaded = True
+            self.update_card_data_table()
 
     def load_template(self):
         file_name, _ = QFileDialog.getOpenFileName(
@@ -280,9 +310,8 @@ class CardMaker(QMainWindow):
         else:
             self.template.update(data)  # Update the existing template with the new data
 
-#        self.template = CardTemplate(data)
         self.update_layers_table()
-        self.update_data_table()
+        self.update_card_data_table()
         self.update_preview()
 
     def load_card_data(self):
@@ -305,11 +334,14 @@ class CardMaker(QMainWindow):
             return
 
         self.card_data_table.setRowCount(len(self.card_data))
+        self.card_data_table.setColumnCount(len(self.card_data[0]))
+        self.card_data_table.setHorizontalHeaderLabels(self.card_data[0].keys())
 
         for i, card in enumerate(self.card_data):
-            item = QTableWidgetItem(json.dumps(card, indent=4))
-            item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEditable)
-            self.card_data_table.setItem(i, 0, item)
+            for j, (key, value) in enumerate(card.items()):
+                item = QTableWidgetItem(str(value))
+                item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEditable)
+                self.card_data_table.setItem(i, j, item)
 
     def update_card_preview(self):
         if not self.template or not self.card_data:
@@ -333,15 +365,15 @@ class CardMaker(QMainWindow):
         if not self.card_data:
             return
 
-        self.data_table.setRowCount(len(self.card_data))
-        self.data_table.setColumnCount(len(self.card_data[0]))
-        self.data_table.setHorizontalHeaderLabels(self.card_data[0].keys())
+        self.card_data_table.setRowCount(len(self.card_data))
+        self.card_data_table.setColumnCount(len(self.card_data[0]))
+        self.card_data_table.setHorizontalHeaderLabels(self.card_data[0].keys())
 
         for i, card in enumerate(self.card_data):
             for j, (key, value) in enumerate(card.items()):
                 item = QTableWidgetItem(str(value))
                 item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEditable)
-                self.data_table.setItem(i, j, item)
+                self.card_data_table.setItem(i, j, item)
 
     def update_layers_table(self):
         if not self.template:
@@ -363,11 +395,11 @@ class CardMaker(QMainWindow):
         image = self.render_card(card_data, include_bleed=False, data_field_position=None, font="Default")
         pixmap = QPixmap.fromImage(image)
         scaled_pixmap = pixmap.scaled(
-            self.preview_label.size(),
+            self.card_preview_label.size(),
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation,
         )
-        self.preview_label.setPixmap(scaled_pixmap)
+        self.card_preview_label.setPixmap(scaled_pixmap)
 
     def export_png(self):
         if not self.card_data:

@@ -22,18 +22,21 @@
       "Attack",
       "Defense",
       "Health",
-      "Special"
+      "Special",
+      "Description"
+
     ],
     "fonts": {
       "default": "Arial"
     },
     "data_field_positions": {
-      "Name": [100, 100],
-      "Type": [100, 200],
-      "Attack": [100, 300],
-      "Defense": [100, 400],
-      "Health": [100, 500],
-      "Special": [100, 600]
+      "Name": [100, -400],
+      "Type": [100, -300],
+      "Attack": [100, 100],
+      "Defense": [100, 200],
+      "Health": [100, 300],
+      "Special": [100, 400],
+      "Description": [100, 500]
     },
     "card_image_path": ""
   }
