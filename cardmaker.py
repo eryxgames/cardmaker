@@ -17,6 +17,11 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QFileDialog,
     QMessageBox,
+    QCheckBox,
+    QRadioButton,
+    QButtonGroup,
+    QInputDialog,
+    QHeaderView,
 )
 from PyQt6.QtCore import Qt, QSizeF, QPointF, QMarginsF, QRectF, QEvent
 from PyQt6.QtGui import (
@@ -175,7 +180,7 @@ class CardMaker(QMainWindow):
         self.card_data_table = QTableWidget()
         self.card_data_table.setColumnCount(1)
         self.card_data_table.setHorizontalHeaderLabels(["Card Data"])
-        self.card_data_table.cellChanged.connect(self.update_card_preview)
+        self.card_data_table.cellChanged.connect(self.card_data_table_cell_changed)
         self.card_data_table.cellDoubleClicked.connect(self.open_image_selector)
         left_layout.addWidget(self.card_data_table)
 
@@ -288,6 +293,10 @@ class CardMaker(QMainWindow):
         # Ensure the template is initialized before calling update_layers_table
         self.update_layers_table()
 
+    def card_data_table_cell_changed(self, row, column):
+        self.update_card_data_from_table()
+        self.update_layers_table()
+
     def open_image_selector(self, row, column):
         if column == self.card_data_table.columnCount() - 1:  # Assuming the last column is for the image path
             file_name, _ = QFileDialog.getOpenFileName(
@@ -297,6 +306,9 @@ class CardMaker(QMainWindow):
                 self.card_data_table.setItem(row, column, QTableWidgetItem(file_name))
                 self.update_card_data_from_table()
                 self.update_card_preview()
+        # Update card preview and layers_table with the new image path
+        self.update_card_preview()
+        self.update_layers_table()        
 
     def update_card_data_from_table(self):
         for row in range(self.card_data_table.rowCount()):
@@ -306,6 +318,8 @@ class CardMaker(QMainWindow):
                 if item:
                     card_data[self.card_data_table.horizontalHeaderItem(column).text()] = item.text()
             self.card_data[row] = card_data
+        # Update layers_table with the new card_data
+        self.update_layers_table()
 
     def toggle_demo_data(self, state):
         if state == Qt.CheckState.Checked:
@@ -430,8 +444,8 @@ class CardMaker(QMainWindow):
         )
         self.card_preview_label.setPixmap(scaled_pixmap)
 
-        # Update card properties label
-        properties_text = "<br>".join(f"<b>{key}:</b> {value}" for key, value in card_data.items())
+        # Update card properties label with the new card_data
+        properties_text = "<br>".join(f"<b>{key}:</b> {value}" for key, value in self.card_data[self.current_card_index].items())
         self.card_properties_label.setText(f"<div style='white-space: pre-wrap;'>Properties:<br>{properties_text}</div>")
 
     def update_data_table(self):
@@ -498,6 +512,8 @@ class CardMaker(QMainWindow):
             delete_btn.setStyleSheet("font-size: 16px; height: 40px;")
             delete_btn.clicked.connect(lambda _, row=i: self.delete_layer(row))
             self.layers_table.setCellWidget(i, 7, delete_btn)
+        # Update card preview with the new layers
+        self.update_card_preview()        
 
     def update_preview(self):
         if not self.template or not self.card_data:
