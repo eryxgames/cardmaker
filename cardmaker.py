@@ -21,8 +21,9 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QFileDialog,
+    QHeaderView,
 )
-from PyQt6.QtCore import Qt, QSize, QRectF, QSizeF, QPointF, QMarginsF
+from PyQt6.QtCore import Qt, QSize, QRectF, QSizeF, QPointF, QMarginsF, QEvent
 
 from PyQt6.QtGui import (
     QImage,
@@ -34,6 +35,8 @@ from PyQt6.QtGui import (
     QFontDatabase,
     QColor,
     QPageSize,
+    QDrag,
+    QDropEvent,
 )
 from PyQt6.QtSvg import QSvgRenderer
 import numpy as np
@@ -127,10 +130,16 @@ class CardMaker(QMainWindow):
 
         # Layers table
         self.layers_table = QTableWidget()
-        self.layers_table.setColumnCount(5)
+        self.layers_table.setColumnCount(6)
         self.layers_table.setHorizontalHeaderLabels(
             ["Path", "Type", "Position X", "Position Y", "Order", "Visible"]
         )
+        self.layers_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.layers_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.layers_table.setDragDropMode(QTableWidget.DragDropMode.InternalMove)
+        self.layers_table.setDragEnabled(True)
+        self.layers_table.setAcceptDrops(True)
+        self.layers_table.viewport().installEventFilter(self)
         layers_layout.addWidget(self.layers_table)
 
         # Add layer button
@@ -138,22 +147,10 @@ class CardMaker(QMainWindow):
         add_layer_btn.clicked.connect(self.add_layer)
         layers_layout.addWidget(add_layer_btn)
 
-        # Move layer buttons
-        move_layer_group = QWidget()
-        move_layer_layout = QHBoxLayout()
-        move_layer_group.setLayout(move_layer_layout)
-
-        # Move layer up button
-        move_up_btn = QPushButton("Move Up")
-        move_up_btn.clicked.connect(self.move_layer_up)
-        move_layer_layout.addWidget(move_up_btn)
-
-        # Move layer down button
-        move_down_btn = QPushButton("Move Down")
-        move_down_btn.clicked.connect(self.move_layer_down)
-        move_layer_layout.addWidget(move_down_btn)
-
-        layers_layout.addWidget(move_layer_group)
+        # Delete layer button
+        delete_layer_btn = QPushButton("Delete Layer")
+        delete_layer_btn.clicked.connect(self.delete_layer)
+        layers_layout.addWidget(delete_layer_btn)
 
         left_layout.addWidget(layers_group)
 
@@ -379,13 +376,38 @@ class CardMaker(QMainWindow):
         if not self.template:
             return
 
-        self.layers_table.setRowCount(len(self.template.layers))
+        self.layers_table.setRowCount(len(self.template.layers) + len(self.template.data_field_positions))
 
         for i, layer in enumerate(self.template.layers):
             for j, (key, value) in enumerate(layer.items()):
                 item = QTableWidgetItem(str(value))
-                item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable)
+                item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEditable)
                 self.layers_table.setItem(i, j, item)
+
+        for i, (field, position) in enumerate(self.template.data_field_positions.items(), start=len(self.template.layers)):
+            item_path = QTableWidgetItem(f"Data Field: {field}")
+            item_path.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable)
+            self.layers_table.setItem(i, 0, item_path)
+
+            item_type = QTableWidgetItem("data_field")
+            item_type.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable)
+            self.layers_table.setItem(i, 1, item_type)
+
+            item_pos_x = QTableWidgetItem(str(position[0]))
+            item_pos_x.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEditable)
+            self.layers_table.setItem(i, 2, item_pos_x)
+
+            item_pos_y = QTableWidgetItem(str(position[1]))
+            item_pos_y.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEditable)
+            self.layers_table.setItem(i, 3, item_pos_y)
+
+            item_order = QTableWidgetItem(str(i))
+            item_order.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable)
+            self.layers_table.setItem(i, 4, item_order)
+
+            item_visible = QTableWidgetItem("True")
+            item_visible.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable)
+            self.layers_table.setItem(i, 5, item_visible)
 
     def update_preview(self):
         if not self.template or not self.card_data:
@@ -503,6 +525,13 @@ class CardMaker(QMainWindow):
         self.update_layers_table()
         self.update_preview()
 
+    def delete_layer(self):
+        selected_row = self.layers_table.currentRow()
+        if selected_row >= 0:
+            del self.template.layers[selected_row]
+            self.update_layers_table()
+            self.update_preview()
+
     def load_card_image(self):
         file_name, _ = QFileDialog.getOpenFileName(
             self, "Load Card Image", "", "Image files (*.png *.jpg *.jpeg)"
@@ -595,6 +624,24 @@ class CardMaker(QMainWindow):
 
         painter.end()
         return image
+
+    def eventFilter(self, source, event):
+        if event.type() == QEvent.Type.Drop and source is self.layers_table.viewport():
+            drop_event = QDropEvent(event)
+            if drop_event.source() is self.layers_table:
+                selected_items = self.layers_table.selectedItems()
+                if selected_items:
+                    selected_row = selected_items[0].row()
+                    drop_row = self.layers_table.rowAt(drop_event.pos().y())
+                    if drop_row != -1 and drop_row != selected_row:
+                        self.template.layers[selected_row], self.template.layers[drop_row] = (
+                            self.template.layers[drop_row],
+                            self.template.layers[selected_row],
+                        )
+                        self.update_layers_table()
+                        self.update_preview()
+                        return True
+        return super().eventFilter(source, event)
 
     def __del__(self):
         pass
