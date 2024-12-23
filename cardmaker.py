@@ -837,6 +837,142 @@ class CardMaker(QMainWindow):
     def __del__(self):
         self.cleanup()
 
+    def load_demo_data(self):
+        if not self.demo_data_loaded:
+            try:
+                # Read CSV with proper encoding
+                df = pd.read_csv(DEMO_CSV_FILE, encoding='utf-8')
+                self.card_data = df.to_dict("records")
+                if not self.card_data:
+                    raise ValueError("No data loaded from CSV file")
+                self.demo_data_loaded = True
+                self.current_card_index = 0
+                self.update_card_data_table()
+                self.update_card_preview()
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Failed to load demo data: {str(e)}")
+                self.card_data = []
+                self.demo_data_loaded = False
+
+    def update_card_data_table(self):
+        if not self.card_data:
+            return
+
+        # Block signals during update
+        self.card_data_table.blockSignals(True)
+        try:
+            # Clear existing data
+            self.card_data_table.setRowCount(0)
+            self.card_data_table.setColumnCount(0)
+
+            # Set up table structure
+            columns = list(self.card_data[0].keys())
+            self.card_data_table.setColumnCount(len(columns))
+            self.card_data_table.setHorizontalHeaderLabels(columns)
+            self.card_data_table.setRowCount(len(self.card_data))
+
+            # Fill data
+            for i, card in enumerate(self.card_data):
+                for j, (key, value) in enumerate(card.items()):
+                    item = QTableWidgetItem(str(value))
+                    self.card_data_table.setItem(i, j, item)
+
+            # Adjust column widths
+            self.card_data_table.resizeColumnsToContents()
+        finally:
+            self.card_data_table.blockSignals(False)
+
+    def update_layers_table(self, card_data=None):  # Make card_data optional
+        if not self.template or not self.template.layers:
+            return
+
+        self.layers_table.blockSignals(True)
+        try:
+            self.layers_table.setRowCount(0)
+            for i, layer in enumerate(self.template.layers):
+                self._add_layer_row(i, layer)
+            self.layers_table.resizeColumnsToContents()
+        finally:
+            self.layers_table.blockSignals(False)
+
+    def update_card_preview(self):
+        if not self.template or not self.card_data:
+            return
+
+        try:
+            card_data = self.card_data[self.current_card_index]
+            provided_positions = {field: (0, 0) for field in self.template.data_fields}
+            
+            image = self.render_card(
+                card_data,
+                include_bleed=False,
+                data_field_position=None,
+                font="Default",
+                provided_positions=provided_positions
+            )
+            
+            pixmap = QPixmap.fromImage(image)
+            scaled_pixmap = pixmap.scaled(
+                self.card_preview_label.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            self.card_preview_label.setPixmap(scaled_pixmap)
+
+            # Update properties label
+            properties_text = "<br>".join(f"<b>{key}:</b> {value}" for key, value in card_data.items())
+            self.card_properties_label.setText(f"<div style='white-space: pre-wrap;'>Properties:<br>{properties_text}</div>")
+
+            self.update_layers_table()  # Remove the card_data argument here
+
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to update card preview: {str(e)}")
+
+
+    def _add_layer_row(self, row_index, layer):
+        self.layers_table.insertRow(row_index)
+        
+        # Create items with proper data
+        items = [
+            QTableWidgetItem(layer.get("path", "")),
+            QTableWidgetItem(layer.get("type", "")),
+            QTableWidgetItem(str(layer.get("position", (0, 0))[0])),
+            QTableWidgetItem(str(layer.get("position", (0, 0))[1])),
+            QTableWidgetItem(str(layer.get("order", row_index))),
+            QTableWidgetItem(str(layer.get("visible", True)))
+        ]
+        
+        for col, item in enumerate(items):
+            self.layers_table.setItem(row_index, col, item)
+
+        # Add action buttons
+        self._add_layer_action_buttons(row_index)
+
+
+
+    def _add_layer_action_buttons(self, row_index):
+        # Create action buttons widget
+        actions_widget = QWidget()
+        actions_layout = QHBoxLayout(actions_widget)
+        actions_layout.setContentsMargins(2, 2, 2, 2)
+
+        # Add Up/Down buttons
+        up_btn = QPushButton("↑")
+        down_btn = QPushButton("↓")
+        up_btn.clicked.connect(lambda: self.move_layer_up(row_index))
+        down_btn.clicked.connect(lambda: self.move_layer_down(row_index))
+        
+        actions_layout.addWidget(up_btn)
+        actions_layout.addWidget(down_btn)
+        
+        self.layers_table.setCellWidget(row_index, 6, actions_widget)
+
+        # Add Delete button
+        delete_btn = QPushButton("×")
+        delete_btn.clicked.connect(lambda: self.delete_layer(row_index))
+        self.layers_table.setCellWidget(row_index, 7, delete_btn)
+
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     ex = CardMaker()

@@ -1,0 +1,6 @@
+Name,Type,Attack,Defense,Health,Special,Description,Illustration
+Dragon Knight,Warrior,5,3,150,Double Strike,A powerful knight who rides a dragon into battle,card_images/dragon_knight.png
+Forest Sage,Mage,2,1,100,Heal,A wise mage who can heal allies,card_images/forest_sage.png
+Stone Golem,Guardian,3,5,200,Shield Wall,A massive creature made of living stone,card_images/stone_golem.png
+Shadow Assassin,Rogue,4,2,120,Stealth Strike,A deadly assassin who strikes from the shadows,card_images/shadow_assassin.png
+Storm Elemental,Elemental,3,3,130,Lightning Bolt,A being of pure lightning and thunder,card_images/storm_elemental.png
