@@ -11,36 +11,25 @@ from PyQt6.QtWidgets import (
     QTableWidgetItem,
     QSpinBox,
     QComboBox,
-    QLineEdit,
-    QMessageBox,
-    QCheckBox,
-    QRadioButton,
-    QButtonGroup,
     QInputDialog,
     QDoubleSpinBox,
     QVBoxLayout,
     QHBoxLayout,
     QFileDialog,
-    QHeaderView,
+    QMessageBox,
 )
-from PyQt6.QtCore import Qt, QSize, QRectF, QSizeF, QPointF, QMarginsF, QEvent
-
+from PyQt6.QtCore import Qt, QSizeF, QPointF, QMarginsF, QRectF, QEvent
 from PyQt6.QtGui import (
     QImage,
     QPainter,
     QPixmap,
     QPdfWriter,
-    QPainterPath,
     QFont,
-    QFontDatabase,
     QColor,
     QPageSize,
-    QDrag,
     QDropEvent,
 )
 from PyQt6.QtSvg import QSvgRenderer
-import numpy as np
-from PIL import Image
 import json
 from cardtemplate import CardTemplate  # Import the CardTemplate class
 
@@ -73,7 +62,7 @@ class CardMaker(QMainWindow):
 
         # Template selection and loading
         template_group = QWidget()
-        template_layout = QVBoxLayout()
+        template_layout = QHBoxLayout()
         template_group.setLayout(template_layout)
 
         # Load template button
@@ -90,6 +79,8 @@ class CardMaker(QMainWindow):
         save_as_template_btn = QPushButton("Save Template As")
         save_as_template_btn.clicked.connect(self.save_as_template)
         template_layout.addWidget(save_as_template_btn)
+
+        left_layout.addWidget(template_group)
 
         # Card size controls
         size_group = QWidget()
@@ -108,7 +99,7 @@ class CardMaker(QMainWindow):
         size_layout.addWidget(QLabel("Height:"))
         size_layout.addWidget(self.height_spin)
 
-        template_layout.addWidget(size_group)
+        left_layout.addWidget(size_group)
 
         # Data fields control
         data_fields_group = QWidget()
@@ -130,7 +121,6 @@ class CardMaker(QMainWindow):
         remove_data_field_btn.clicked.connect(self.remove_data_field)
         data_fields_layout.addWidget(remove_data_field_btn)
 
-        left_layout.addWidget(template_group)
         left_layout.addWidget(data_fields_group)
 
         # Layers control
@@ -161,7 +151,7 @@ class CardMaker(QMainWindow):
 
         # Card data control
         card_data_group = QWidget()
-        card_data_layout = QVBoxLayout()
+        card_data_layout = QHBoxLayout()
         card_data_group.setLayout(card_data_layout)
 
         # Load card data button
@@ -179,15 +169,15 @@ class CardMaker(QMainWindow):
         save_as_card_data_btn.clicked.connect(self.save_as_card_data)
         card_data_layout.addWidget(save_as_card_data_btn)
 
+        left_layout.addWidget(card_data_group)
+
         # Card data table
         self.card_data_table = QTableWidget()
         self.card_data_table.setColumnCount(1)
         self.card_data_table.setHorizontalHeaderLabels(["Card Data"])
         self.card_data_table.cellChanged.connect(self.update_card_preview)
         self.card_data_table.cellDoubleClicked.connect(self.open_image_selector)
-        card_data_layout.addWidget(self.card_data_table)
-
-        left_layout.addWidget(card_data_group)
+        left_layout.addWidget(self.card_data_table)
 
         # PDF page size controls
         pdf_page_size_group = QWidget()
@@ -228,7 +218,7 @@ class CardMaker(QMainWindow):
 
         # Preview card button
         preview_card_btn = QPushButton("Preview Card")
-        preview_card_btn.clicked.connect(self.update_card_preview)
+        preview_card_btn.clicked.connect(self.open_preview_window)
         buttons_layout.addWidget(preview_card_btn)
 
         # Export PDF button
@@ -260,6 +250,8 @@ class CardMaker(QMainWindow):
 
         left_layout.addWidget(nav_buttons_group)
 
+        main_layout.addWidget(left_column)
+
         # Right column for card preview
         right_column = QWidget()
         right_layout = QVBoxLayout()
@@ -275,7 +267,16 @@ class CardMaker(QMainWindow):
         self.card_properties_label.setTextFormat(Qt.TextFormat.RichText)
         right_layout.addWidget(self.card_properties_label)
 
-        main_layout.addWidget(left_column)
+        # Card resolution and printing resolution info
+        resolution_info_label = QLabel()
+        resolution_info_label.setTextFormat(Qt.TextFormat.RichText)
+        resolution_info_label.setText(
+            f"<div style='white-space: pre-wrap;'>"
+            f"Resolution: {self.width_spin.value()} x {self.height_spin.value()} pixels<br>"
+            f"Printing Resolution: 300 DPI</div>"
+        )
+        right_layout.addWidget(resolution_info_label)
+
         main_layout.addWidget(right_column)
 
         # Initialize template and demo data
@@ -296,6 +297,15 @@ class CardMaker(QMainWindow):
                 self.card_data_table.setItem(row, column, QTableWidgetItem(file_name))
                 self.update_card_data_from_table()
                 self.update_card_preview()
+
+    def update_card_data_from_table(self):
+        for row in range(self.card_data_table.rowCount()):
+            card_data = {}
+            for column in range(self.card_data_table.columnCount()):
+                item = self.card_data_table.item(row, column)
+                if item:
+                    card_data[self.card_data_table.horizontalHeaderItem(column).text()] = item.text()
+            self.card_data[row] = card_data
 
     def toggle_demo_data(self, state):
         if state == Qt.CheckState.Checked:
@@ -469,25 +479,25 @@ class CardMaker(QMainWindow):
             item_visible.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEditable)
             self.layers_table.setItem(i, 5, item_visible)
 
-            move_up_btn = QPushButton("▲")
-            move_up_btn.setStyleSheet("font-size: 10px;")
+            move_up_btn = QPushButton("Up")
+            move_up_btn.setStyleSheet("font-size: 16px; height: 40px;")
             move_up_btn.clicked.connect(lambda _, row=i: self.move_layer_up(row))
 
-            move_down_btn = QPushButton("▼")
-            move_down_btn.setStyleSheet("font-size: 10px;")
+            move_down_btn = QPushButton("Down")
+            move_down_btn.setStyleSheet("font-size: 16px; height: 40px;")
             move_down_btn.clicked.connect(lambda _, row=i: self.move_layer_down(row))
 
-            delete_btn = QPushButton("—")
-            delete_btn.setStyleSheet("font-size: 10px;")
-            delete_btn.clicked.connect(lambda _, row=i: self.delete_layer(row))
-
-            actions_layout = QHBoxLayout()
+            actions_layout = QVBoxLayout()
             actions_layout.addWidget(move_up_btn)
             actions_layout.addWidget(move_down_btn)
-            actions_layout.addWidget(delete_btn)
             actions_widget = QWidget()
             actions_widget.setLayout(actions_layout)
             self.layers_table.setCellWidget(i, 6, actions_widget)
+
+            delete_btn = QPushButton("Delete")
+            delete_btn.setStyleSheet("font-size: 16px; height: 40px;")
+            delete_btn.clicked.connect(lambda _, row=i: self.delete_layer(row))
+            self.layers_table.setCellWidget(i, 7, delete_btn)
 
     def update_preview(self):
         if not self.template or not self.card_data:
@@ -502,6 +512,10 @@ class CardMaker(QMainWindow):
             Qt.TransformationMode.SmoothTransformation,
         )
         self.card_preview_label.setPixmap(scaled_pixmap)
+
+        # Update card properties label
+        properties_text = "<br>".join(f"<b>{key}:</b> {value}" for key, value in card_data.items())
+        self.card_properties_label.setText(f"<div style='white-space: pre-wrap;'>Properties:<br>{properties_text}</div>")
 
     def export_png(self):
         if not self.card_data:
@@ -729,6 +743,32 @@ class CardMaker(QMainWindow):
                         self.update_preview()
                         return True
         return super().eventFilter(source, event)
+
+    def open_preview_window(self):
+        if not self.template or not self.card_data:
+            return
+
+        preview_window = QMainWindow()
+        preview_widget = QWidget()
+        preview_layout = QVBoxLayout()
+        preview_widget.setLayout(preview_layout)
+        preview_window.setCentralWidget(preview_widget)
+
+        preview_label = QLabel()
+        preview_label.setFixedSize(600, 800)
+        preview_layout.addWidget(preview_label)
+
+        card_data = self.card_data[self.current_card_index]
+        image = self.render_card(card_data, include_bleed=False, data_field_position=None, font="Default")
+        pixmap = QPixmap.fromImage(image)
+        scaled_pixmap = pixmap.scaled(
+            preview_label.size(),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        preview_label.setPixmap(scaled_pixmap)
+
+        preview_window.show()
 
     def __del__(self):
         pass
