@@ -140,9 +140,9 @@ class CardMaker(QMainWindow):
 
         # Layers table
         self.layers_table = QTableWidget()
-        self.layers_table.setColumnCount(6)
+        self.layers_table.setColumnCount(8)
         self.layers_table.setHorizontalHeaderLabels(
-            ["Path", "Type", "Position X", "Position Y", "Order", "Visible"]
+            ["Path", "Type", "Position X", "Position Y", "Order", "Visible", "Actions", "Delete"]
         )
         self.layers_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.layers_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -156,11 +156,6 @@ class CardMaker(QMainWindow):
         add_layer_btn = QPushButton("Add Layer")
         add_layer_btn.clicked.connect(self.add_layer)
         layers_layout.addWidget(add_layer_btn)
-
-        # Delete layer button
-        delete_layer_btn = QPushButton("Delete Layer")
-        delete_layer_btn.clicked.connect(self.delete_layer)
-        layers_layout.addWidget(delete_layer_btn)
 
         left_layout.addWidget(layers_group)
 
@@ -299,6 +294,8 @@ class CardMaker(QMainWindow):
             )
             if file_name:
                 self.card_data_table.setItem(row, column, QTableWidgetItem(file_name))
+                self.update_card_data_from_table()
+                self.update_card_preview()
 
     def toggle_demo_data(self, state):
         if state == Qt.CheckState.Checked:
@@ -380,15 +377,6 @@ class CardMaker(QMainWindow):
         df = pd.DataFrame(self.card_data)
         df.to_csv(file_name, index=False)
 
-    def update_card_data_from_table(self):
-        for row in range(self.card_data_table.rowCount()):
-            card_data = {}
-            for column in range(self.card_data_table.columnCount()):
-                item = self.card_data_table.item(row, column)
-                if item:
-                    card_data[self.card_data_table.horizontalHeaderItem(column).text()] = item.text()
-            self.card_data[row] = card_data
-
     def load_card_data(self):
         file_name, _ = QFileDialog.getOpenFileName(
             self, "Load Card Data", "", "CSV files (*.csv)"
@@ -454,38 +442,52 @@ class CardMaker(QMainWindow):
         if not self.template:
             return
 
-        self.layers_table.setRowCount(len(self.template.layers) + len(self.template.data_field_positions))
+        self.layers_table.setRowCount(len(self.template.layers))
 
         for i, layer in enumerate(self.template.layers):
-            for j, (key, value) in enumerate(layer.items()):
-                item = QTableWidgetItem(str(value))
-                item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEditable)
-                self.layers_table.setItem(i, j, item)
-
-        for i, (field, position) in enumerate(self.template.data_field_positions.items(), start=len(self.template.layers)):
-            item_path = QTableWidgetItem(f"Data Field: {field}")
-            item_path.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable)
+            item_path = QTableWidgetItem(layer["path"])
+            item_path.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEditable)
             self.layers_table.setItem(i, 0, item_path)
 
-            item_type = QTableWidgetItem("data_field")
+            item_type = QTableWidgetItem(layer["type"])
             item_type.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable)
             self.layers_table.setItem(i, 1, item_type)
 
-            item_pos_x = QTableWidgetItem(str(position[0]))
+            item_pos_x = QTableWidgetItem(str(layer["position"][0]))
             item_pos_x.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEditable)
             self.layers_table.setItem(i, 2, item_pos_x)
 
-            item_pos_y = QTableWidgetItem(str(position[1]))
+            item_pos_y = QTableWidgetItem(str(layer["position"][1]))
             item_pos_y.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEditable)
             self.layers_table.setItem(i, 3, item_pos_y)
 
-            item_order = QTableWidgetItem(str(i))
+            item_order = QTableWidgetItem(str(layer["order"]))
             item_order.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable)
             self.layers_table.setItem(i, 4, item_order)
 
-            item_visible = QTableWidgetItem("True")
-            item_visible.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable)
+            item_visible = QTableWidgetItem("True" if layer.get("visible", True) else "False")
+            item_visible.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEditable)
             self.layers_table.setItem(i, 5, item_visible)
+
+            move_up_btn = QPushButton("▲")
+            move_up_btn.setStyleSheet("font-size: 10px;")
+            move_up_btn.clicked.connect(lambda _, row=i: self.move_layer_up(row))
+
+            move_down_btn = QPushButton("▼")
+            move_down_btn.setStyleSheet("font-size: 10px;")
+            move_down_btn.clicked.connect(lambda _, row=i: self.move_layer_down(row))
+
+            delete_btn = QPushButton("—")
+            delete_btn.setStyleSheet("font-size: 10px;")
+            delete_btn.clicked.connect(lambda _, row=i: self.delete_layer(row))
+
+            actions_layout = QHBoxLayout()
+            actions_layout.addWidget(move_up_btn)
+            actions_layout.addWidget(move_down_btn)
+            actions_layout.addWidget(delete_btn)
+            actions_widget = QWidget()
+            actions_widget.setLayout(actions_layout)
+            self.layers_table.setCellWidget(i, 6, actions_widget)
 
     def update_preview(self):
         if not self.template or not self.card_data:
@@ -545,22 +547,20 @@ class CardMaker(QMainWindow):
                 writer.newPage()
         painter.end()
 
-    def move_layer_up(self):
-        selected_row = self.layers_table.currentRow()
-        if selected_row > 0:
-            self.template.layers[selected_row - 1], self.template.layers[selected_row] = (
-                self.template.layers[selected_row],
-                self.template.layers[selected_row - 1],
+    def move_layer_up(self, row):
+        if row > 0:
+            self.template.layers[row - 1], self.template.layers[row] = (
+                self.template.layers[row],
+                self.template.layers[row - 1],
             )
             self.update_layers_table()
             self.update_preview()
 
-    def move_layer_down(self):
-        selected_row = self.layers_table.currentRow()
-        if selected_row < len(self.template.layers) - 1:
-            self.template.layers[selected_row + 1], self.template.layers[selected_row] = (
-                self.template.layers[selected_row],
-                self.template.layers[selected_row + 1],
+    def move_layer_down(self, row):
+        if row < len(self.template.layers) - 1:
+            self.template.layers[row + 1], self.template.layers[row] = (
+                self.template.layers[row],
+                self.template.layers[row + 1],
             )
             self.update_layers_table()
             self.update_preview()
@@ -598,15 +598,15 @@ class CardMaker(QMainWindow):
                 "type": layer_type,
                 "position": position,
                 "order": order,
+                "visible": True
             }
         )
         self.update_layers_table()
         self.update_preview()
 
-    def delete_layer(self):
-        selected_row = self.layers_table.currentRow()
-        if selected_row >= 0:
-            del self.template.layers[selected_row]
+    def delete_layer(self, row):
+        if row >= 0:
+            del self.template.layers[row]
             self.update_layers_table()
             self.update_preview()
 
@@ -668,23 +668,24 @@ class CardMaker(QMainWindow):
 
         # Draw layers
         for layer in self.template.layers:
-            if layer["type"] == "svg":
-                renderer = QSvgRenderer(layer["path"])
-                renderer.render(painter)
-            elif layer["type"] == "png":
-                pixmap = QPixmap(layer["path"])
-                painter.drawPixmap(
-                    QPointF(layer["position"][0], layer["position"][1]),
-                    pixmap,
-                )
-            elif layer.get("card_illustration"):
-                if "Illustration" in card_data:
-                    illustration_path = card_data["Illustration"]
-                    illustration_pixmap = QPixmap(illustration_path)
+            if layer.get("visible", True):
+                if layer["type"] == "svg":
+                    renderer = QSvgRenderer(layer["path"])
+                    renderer.render(painter)
+                elif layer["type"] == "png":
+                    pixmap = QPixmap(layer["path"])
                     painter.drawPixmap(
                         QPointF(layer["position"][0], layer["position"][1]),
-                        illustration_pixmap,
+                        pixmap,
                     )
+                elif layer.get("card_illustration"):
+                    if "Illustration" in card_data:
+                        illustration_path = card_data["Illustration"]
+                        illustration_pixmap = QPixmap(illustration_path)
+                        painter.drawPixmap(
+                            QPointF(layer["position"][0], layer["position"][1]),
+                            illustration_pixmap,
+                        )
 
         # Draw card data if provided
         if card_data:

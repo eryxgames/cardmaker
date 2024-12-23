@@ -7,20 +7,20 @@
         "path": "card_front.svg",
         "type": "svg",
         "position": [0, 0],
-        "order": 0
+        "order": 1
       },
       {
         "path": "",
         "type": "png",
         "card_illustration": true,
         "position": [0, 0],
-        "order": 1
+        "order": 2
       },
       {
         "path": "card_back.svg",
         "type": "svg",
         "position": [0, 0],
-        "order": 2
+        "order": 0
       }
     ],
     "data_fields": [
