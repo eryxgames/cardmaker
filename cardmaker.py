@@ -548,13 +548,18 @@ class CardMaker(QMainWindow):
             painter.setFont(font)
             painter.setPen(QColor("black"))
 
-            text_rect = QRectF(
-                data_field_position[0] if data_field_position else self.template.data_field_positions[self.template.data_fields[0]],
-                data_field_position[1] if data_field_position else self.template.data_field_positions[self.template.data_fields[0]],
-                width - 2 * self.template.bleed,
-                height - 2 * self.template.bleed,
-            )
-            painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, "\n".join(str(value) for value in card_data.values()))
+            # Ensure data_field_positions has the correct keys
+            if self.template.data_fields and self.template.data_field_positions:
+                for field in self.template.data_fields:
+                    if field in self.template.data_field_positions:
+                        position = self.template.data_field_positions[field]
+                        text_rect = QRectF(
+                            position[0],
+                            position[1],
+                            width - 2 * self.template.bleed,
+                            height - 2 * self.template.bleed,
+                        )
+                        painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, str(card_data.get(field, "")))
 
         painter.end()
         return image
