@@ -1,0 +1,33 @@
+{
+    "width": 825,
+    "height": 1125,
+    "bleed": 75,
+    "layers": [
+      {
+        "path": "template.svg",
+        "type": "svg",
+        "position": [0, 0],
+        "order": 0
+      },
+      {
+        "path": "frame.png",
+        "type": "png",
+        "position": [50, 50],
+        "order": 1
+      }
+    ],
+    "data_fields": [
+      "Name",
+      "Type",
+      "Attack",
+      "Defense",
+      "Health",
+      "Special",
+      "Description"
+    ],
+    "fonts": {
+      "Default": "Arial",
+      "Fantasy": "FantasyFont.ttf"
+    }
+  }
+  

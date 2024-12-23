@@ -1,0 +1,10 @@
+Name,Type,Attack,Defense,Health,Special,Description
+Card1,Attacker,3,0,100,"Strike: Deal 3 damage to target defender.", "A powerful melee attacker."
+Card2,Attacker,2,0,120,"Strike: Deal 2 damage to target defender.", "A swift and agile attacker."
+Card3,Defender,0,3,150,"Block: Gain 3 shield for 1 turn.", "A sturdy and resilient defender."
+Card4,Defender,0,2,130,"Block: Gain 2 shield for 1 turn.", "An adaptable and versatile defender."
+Card5,Special,0,0,0,"Summon: Summon a random attacker.", "A mysterious portal that spawns attackers."
+Card6,Bunker,0,5,200,"Protect: Gain 5 shield for all allies for 1 turn.", "A fortified structure that protects allies."
+Card7,Vehicle,2,2,180,"Move: Move to an adjacent tile.", "A fast and maneuverable vehicle."
+Card8,Equipment,0,0,0,"Equip: Grant +1 attack to an adjacent attacker.", "A powerful weapon that boosts attack."
+Card9,Weapon,3,0,0,"Attack: Deal 3 damage to target defender.", "A devastating weapon that deals heavy damage."
