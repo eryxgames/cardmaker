@@ -3,8 +3,8 @@ import json
 
 class CardTemplate:
     def __init__(self, data):
-        self.width = data.get("width", 825)  # Default width if not provided
-        self.height = data.get("height", 1125)  # Default height if not provided
+        self.width = data.get("width", 640)  # Default width if not provided
+        self.height = data.get("height", 920)  # Default height if not provided
         self.bleed = data.get("bleed", 0)  # Default bleed if not provided
         self.layers = data.get("layers", [])  # Default empty list if not provided
         self.data_fields = data.get("data_fields", [])  # Default empty list if not provided
