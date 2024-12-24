@@ -36,13 +36,13 @@
       "default": "Arial"
     },
     "data_field_positions": {
-      "Name": [100, -400],
-      "Type": [100, -300],
-      "Attack": [100, 100],
-      "Defense": [100, 200],
-      "Health": [100, 300],
-      "Special": [100, 400],
-      "Description": [100, 500]
+      "Name": [0, -400],
+      "Type": [0, -300],
+      "Attack": [300, -100],
+      "Defense": [300, 0],
+      "Health": [300, 100],
+      "Special": [0, 400],
+      "Description": [0, 500]
     },
-    "card_image_path": ""
+    "card_image_path": "card_images/character.png"
 }
