@@ -1,48 +1,123 @@
 {
-    "width": 825,
-    "height": 1125,
-    "bleed": 75,
-    "layers": [
+  "width": 825,
+  "height": 1125,
+  "bleed": 75,
+  "layers": [
       {
-        "path": "card_front.svg",
-        "type": "svg",
-        "position": [0, 0],
-        "order": 1
+          "id": "background",
+          "path": "card_front.svg",
+          "type": "svg",
+          "position": [0, 0],
+          "order": 1,
+          "visible": true,
+          "placeholder": false
       },
       {
-        "path": "",
-        "type": "png",
-        "card_illustration": true,
-        "position": [0, 0],
-        "order": 2
+          "id": "main_illustration",
+          "type": "png",
+          "position": [50, 50],
+          "order": 2,
+          "visible": true,
+          "placeholder": true,
+          "content_field": "Illustration",
+          "size": {
+              "width": 300,
+              "height": 300
+          }
       },
       {
-        "path": "card_back.svg",
-        "type": "svg",
-        "position": [0, 0],
-        "order": 0
+          "id": "attack_icon",
+          "type": "png",
+          "position": [300, -100],
+          "order": 3,
+          "visible": true,
+          "placeholder": true,
+          "content_field": "AttackIcon",
+          "size": {
+              "width": 50,
+              "height": 50
+          }
+      },
+      {
+          "id": "defense_icon",
+          "type": "png",
+          "position": [300, 0],
+          "order": 4,
+          "visible": true,
+          "placeholder": true,
+          "content_field": "DefenseIcon",
+          "size": {
+              "width": 50,
+              "height": 50
+          }
+      },
+      {
+          "id": "card_back",
+          "path": "card_back.svg",
+          "type": "svg",
+          "position": [0, 0],
+          "order": 0,
+          "visible": true,
+          "placeholder": false
       }
-    ],
-    "data_fields": [
-      "Name",
-      "Type",
-      "Attack",
-      "Defense",
-      "Health",
-      "Special",
-      "Description"
-    ],
-    "fonts": {
-      "default": "Arial"
-    },
-    "data_field_positions": {
-      "Name": [0, -400],
-      "Type": [0, -300],
-      "Attack": [300, -100],
-      "Defense": [300, 0],
-      "Health": [300, 100],
-      "Special": [0, 400],
-      "Description": [0, 500]
-    },
-    "card_image_path": "card_images/character.png"
+  ],
+  "text_fields": {
+      "Name": {
+          "position": [0, -400],
+          "font": "Arial",
+          "size": 24,
+          "color": "#000000",
+          "alignment": "center"
+      },
+      "Type": {
+          "position": [0, -300],
+          "font": "Arial",
+          "size": 18,
+          "color": "#000000",
+          "alignment": "center"
+      },
+      "Attack": {
+          "position": [300, -100],
+          "font": "Arial",
+          "size": 20,
+          "color": "#FF0000",
+          "alignment": "center"
+      },
+      "Defense": {
+          "position": [300, 0],
+          "font": "Arial",
+          "size": 20,
+          "color": "#0000FF",
+          "alignment": "center"
+      },
+      "Health": {
+          "position": [300, 100],
+          "font": "Arial",
+          "size": 20,
+          "color": "#00FF00",
+          "alignment": "center"
+      },
+      "Special": {
+          "position": [0, 400],
+          "font": "Arial",
+          "size": 16,
+          "color": "#000000",
+          "alignment": "center"
+      },
+      "Description": {
+          "position": [0, 500],
+          "font": "Arial",
+          "size": 14,
+          "color": "#333333",
+          "alignment": "center",
+          "max_width": 400
+      }
+  },
+  "layer_overrides": {},
+  "card_image_path": "card_images/character.png",
+  "fonts": {
+      "default": "Arial",
+      "title": "Arial Bold",
+      "body": "Arial"
+  }
 }
