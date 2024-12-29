@@ -434,8 +434,10 @@ class CardMaker(QMainWindow):
             QMessageBox.warning(None, "Error", f"Failed to load template: {e}")
             return
 
-        if not all(key in data for key in ("width", "height", "bleed", "layers", "data_fields", "fonts", "card_image_path")):
-            QMessageBox.warning(None, "Error", "Invalid template format")
+        # Updated required keys check
+        required_keys = {"width", "height", "bleed", "layers", "text_fields", "fonts", "card_image_path"}
+        if not all(key in data for key in required_keys):
+            QMessageBox.warning(None, "Error", f"Invalid template format. Missing one of required keys: {required_keys}")
             return
 
         if not self.template:

@@ -15,14 +15,14 @@
       {
           "id": "main_illustration",
           "type": "png",
-          "position": [50, 50],
+          "position": [0, 0],
           "order": 2,
           "visible": true,
           "placeholder": true,
           "content_field": "Illustration",
           "size": {
-              "width": 300,
-              "height": 300
+              "width": 600,
+              "height": 600
           }
       },
       {

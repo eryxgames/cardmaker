@@ -6,22 +6,18 @@ class CardTemplate:
         self.height = data.get("height", 920)
         self.bleed = data.get("bleed", 0)
         self.layers = data.get("layers", [])
-        self.data_fields = list(data.get("text_fields", {}).keys())  # Get data fields from text_fields
+        self.text_fields = data.get("text_fields", {})
+        # Get data fields from text_fields keys and placeholder content_fields
+        self.data_fields = list(self.text_fields.keys())
         self.fonts = data.get("fonts", {})
         self.card_image_path = data.get("card_image_path", "")
-        self.text_fields = data.get("text_fields", {})
         self.layer_overrides = data.get("layer_overrides", {})
         
-        # Initialize placeholder layers
-        self.placeholder_layers = []
+        # Add any content_fields from placeholder layers to data_fields
         for layer in self.layers:
-            if layer.get("placeholder"):
-                self.placeholder_layers.append({
-                    "id": layer.get("id"),
-                    "type": layer.get("type"),
-                    "content_field": layer.get("content_field"),
-                    "position": layer.get("position", [0, 0])
-                })
+            if layer.get("placeholder") and layer.get("content_field"):
+                if layer["content_field"] not in self.data_fields:
+                    self.data_fields.append(layer["content_field"])
 
     def set_card_image_path(self, path):
         self.card_image_path = path
@@ -42,22 +38,17 @@ class CardTemplate:
         self.height = data.get("height", self.height)
         self.bleed = data.get("bleed", self.bleed)
         self.layers = data.get("layers", self.layers)
-        self.data_fields = data.get("data_fields", self.data_fields)
         self.fonts = data.get("fonts", self.fonts)
-        self.data_field_positions = data.get("data_field_positions", self.data_field_positions)
         self.card_image_path = data.get("card_image_path", self.card_image_path)
         self.text_fields = data.get("text_fields", self.text_fields)
-
-        # Update placeholder layers
-        self.placeholder_layers = []
+        self.layer_overrides = data.get("layer_overrides", self.layer_overrides)
+        
+        # Update data_fields from text_fields and placeholder layers
+        self.data_fields = list(self.text_fields.keys())
         for layer in self.layers:
-            if layer.get("placeholder"):
-                self.placeholder_layers.append({
-                    "id": layer.get("id"),
-                    "type": layer.get("type"),
-                    "content_field": layer.get("content_field"),
-                    "position": layer.get("position", [0, 0])
-                })
+            if layer.get("placeholder") and layer.get("content_field"):
+                if layer["content_field"] not in self.data_fields:
+                    self.data_fields.append(layer["content_field"])
 
     def save_to_json(self, file_path):
         """Save template to JSON file"""
@@ -66,11 +57,10 @@ class CardTemplate:
             "height": self.height,
             "bleed": self.bleed,
             "layers": self.layers,
-            "data_fields": self.data_fields,
+            "text_fields": self.text_fields,
             "fonts": self.fonts,
-            "data_field_positions": self.data_field_positions,
-            "card_image_path": self.card_image_path,
-            "text_fields": self.text_fields
+            "layer_overrides": self.layer_overrides,
+            "card_image_path": self.card_image_path
         }
         try:
             with open(file_path, "w") as f:
